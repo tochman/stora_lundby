@@ -1,268 +1,117 @@
-import { useState } from 'react';
-import { PublicLayout } from './Layout';
+const mockData = {
+  applications: [
+    {
+      id: 'demo-1',
+      createdAt: new Date().toISOString(),
+      year: '2026',
+      term: 'Höst',
+      engagementType: 'need-help',
+      supportArea: 'Marknad',
+      name: 'Anna Andersson',
+      phone: '070-1234567',
+      email: 'anna@example.com',
+      childName: 'Lina',
+      childClass: '4A',
+      comments: 'Behöver hjälp med marknadsföring.',
+      status: 'Ny',
+      consentGiven: 'TRUE',
+      consentAt: new Date().toISOString(),
+      consentVersion: 'v1'
+    },
+    {
+      id: 'demo-2',
+      createdAt: new Date().toISOString(),
+      year: '2026',
+      term: 'Höst',
+      engagementType: 'volunteer',
+      supportArea: 'Scout / aktivitet',
+      name: 'Lars Svensson',
+      phone: '073-7654321',
+      email: 'lars@example.com',
+      childName: '',
+      childClass: '',
+      comments: 'Vill hjälpa till med aktiviteter.',
+      status: 'Behandlas',
+      consentGiven: 'TRUE',
+      consentAt: new Date().toISOString(),
+      consentVersion: 'v1'
+    }
+  ],
+  consentLog: [
+    {
+      applicationId: 'demo-1',
+      personName: 'Anna Andersson',
+      email: 'anna@example.com',
+      consentGivenAt: new Date().toISOString(),
+      consentVersion: 'v1',
+      consentText: 'Jag godkänner att Stora Lundby sparar mina uppgifter.',
+      source: 'public-form'
+    }
+  ],
+  config: {
+    currentYear: '2026',
+    currentTerm: 'Höst',
+    consentVersion: 'v1',
+    consentText: 'Jag godkänner att Stora Lundby sparar mina uppgifter för att hantera anmälan och kontakta mig i samband med verksamheten.'
+  }
+};
 
-const steps = [1, 2, 3, 4, 5];
+function callGoogleAppsScript(functionName, ...args) {
+  return new Promise((resolve, reject) => {
+    if (typeof google !== 'undefined' && google.script && google.script.run) {
+      google.script.run
+        .withSuccessHandler((result) => resolve(result))
+        .withFailureHandler((error) => reject(error))
+        [functionName](...args);
+      return;
+    }
 
-const engagementOptions = [
-  { value: 'need-help', label: 'Jag behöver hjälp' },
-  { value: 'volunteer', label: 'Jag vill hjälpa till' },
-  { value: 'organizer', label: 'Jag vill vara ansvarig' }
-];
+    const fallbackMap = {
+      submitApplication: async (payload) => {
+        const result = { ok: true, message: 'Demomod: anmälan har sparats.' };
+        return result;
+      },
+      getApplications: async () => mockData.applications,
+      getAdminDashboard: async () => ({
+        summary: {
+          total: mockData.applications.length,
+          newCount: mockData.applications.filter((item) => item.status === 'Ny').length,
+          volunteerCount: mockData.applications.filter((item) => item.engagementType === 'volunteer').length,
+          helpCount: mockData.applications.filter((item) => item.engagementType === 'need-help').length
+        },
+        rows: mockData.applications
+      }),
+      getConsentLog: async () => mockData.consentLog,
+      getConfig: async () => mockData.config,
+      updateApplicationStatus: async () => ({ ok: true }),
+      createManualApplication: async () => ({ ok: true }),
+      addAdmin: async () => ({ ok: true }),
+      getAdmins: async () => [{ email: 'admin@example.com', role: 'admin', active: 'TRUE' }]
+    };
 
-const supportAreas = [
-  'Marknad',
-  'Scout / aktivitet',
-  'Logistik',
-  'Mat och fika',
-  'Kommunikation',
-  'Administration',
-  'Annan'
-];
+    const fallbackFn = fallbackMap[functionName];
+    if (fallbackFn) {
+      fallbackFn(...args)
+        .then(resolve)
+        .catch(reject);
+      return;
+    }
 
-export default function PublicWizard() {
-  const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    year: '2026',
-    term: 'Höst',
-    engagementType: '',
-    supportArea: '',
-    name: '',
-    phone: '',
-    email: '',
-    childName: '',
-    childClass: '',
-    comments: '',
-    consent: false
+    reject(new Error('Google Apps Script function not available in this environment.'));
   });
-  const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
-  const [loading, setLoading] = useState(false);
-
-  const updateField = (field, value) => {
-    setFormData((prev) => ({ ...prev, [field]: value }));
-  };
-
-  const nextStep = () => {
-    if (step < 5) {
-      setStep((current) => current + 1);
-      setError('');
-    }
-  };
-
-  const previousStep = () => {
-    if (step > 1) {
-      setStep((current) => current - 1);
-      setError('');
-    }
-  };
-
-  const handleSubmit = async (event) => {
-    event.preventDefault();
-    setError('');
-    setSuccess('');
-
-    if (!formData.name || !formData.phone || !formData.email) {
-      setError('Namn, telefon och e-post är obligatoriska.');
-      return;
-    }
-
-    if (!formData.consent) {
-      setError('Du måste godkänna GDPR-samtycke för att skicka in anmälan.');
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      // Replace with google.script.run in production.
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      setSuccess('Din anmälan har mottagits.');
-      setFormData({
-        year: '2026',
-        term: 'Höst',
-        engagementType: '',
-        supportArea: '',
-        name: '',
-        phone: '',
-        email: '',
-        childName: '',
-        childClass: '',
-        comments: '',
-        consent: false
-      });
-      setStep(1);
-    } catch (err) {
-      setError('Något gick fel. Försök igen.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  return (
-    <PublicLayout>
-      <div className="mx-auto max-w-3xl">
-        <div className="mb-8">
-          <div className="mb-4 flex items-center justify-between gap-2">
-            {steps.map((item) => (
-              <div
-                key={item}
-                className={`flex h-10 w-10 items-center justify-center rounded-full text-sm font-bold ${
-                  item <= step ? 'bg-brand-500 text-white' : 'bg-slate-200 text-slate-600'
-                }`}
-              >
-                {item}
-              </div>
-            ))}
-          </div>
-          <div className="h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500 transition-all" style={{ width: `${(step / 5) * 100}%` }} />
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">1. Välj år och termin</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="year">År</label>
-                  <select id="year" value={formData.year} onChange={(e) => updateField('year', e.target.value)} className="input">
-                    <option value="2026">2026</option>
-                    <option value="2027">2027</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="label" htmlFor="term">Termin</label>
-                  <select id="term" value={formData.term} onChange={(e) => updateField('term', e.target.value)} className="input">
-                    <option value="Höst">Höst</option>
-                    <option value="Vår">Vår</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">2. Vilken typ av engagemang?</h2>
-              <div>
-                <label className="label" htmlFor="engagementType">Jag vill</label>
-                <select
-                  id="engagementType"
-                  value={formData.engagementType}
-                  onChange={(e) => updateField('engagementType', e.target.value)}
-                  className="input"
-                >
-                  <option value="">Välj</option>
-                  {engagementOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="label" htmlFor="supportArea">Typ av stöd</label>
-                <select
-                  id="supportArea"
-                  value={formData.supportArea}
-                  onChange={(e) => updateField('supportArea', e.target.value)}
-                  className="input"
-                >
-                  <option value="">Välj (valfritt)</option>
-                  {supportAreas.map((area) => (
-                    <option key={area} value={area}>
-                      {area}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">3. Kontaktuppgifter</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="name">Namn</label>
-                  <input id="name" type="text" value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="phone">Telefon</label>
-                  <input id="phone" type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="input" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="label" htmlFor="email">E-post</label>
-                  <input id="email" type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="childName">Barnets namn</label>
-                  <input id="childName" type="text" value={formData.childName} onChange={(e) => updateField('childName', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="childClass">Klass / årskurs</label>
-                  <input id="childClass" type="text" value={formData.childClass} onChange={(e) => updateField('childClass', e.target.value)} className="input" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">4. Övrig information</h2>
-              <div>
-                <label className="label" htmlFor="comments">Kommentar</label>
-                <textarea
-                  id="comments"
-                  value={formData.comments}
-                  onChange={(e) => updateField('comments', e.target.value)}
-                  className="input min-h-28"
-                  placeholder="Skriv eventuella önskemål eller behov här..."
-                />
-              </div>
-            </div>
-          )}
-
-          {step === 5 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">5. GDPR-samtycke</h2>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-                <p>Jag godkänner att Stora Lundby sparar mina uppgifter för att administrera min anmälan och kontakta mig i samband med verksamheten.</p>
-              </div>
-              <label className="flex items-start gap-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={formData.consent}
-                  onChange={(e) => updateField('consent', e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                />
-                <span>Jag godkänner GDPR-samtycke.</span>
-              </label>
-            </div>
-          )}
-
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">{success}</div>}
-
-          <div className="flex justify-between gap-4 pt-4">
-            <button type="button" className="btn btn-secondary" disabled={step === 1} onClick={previousStep}>
-              Tillbaka
-            </button>
-
-            {step < 5 ? (
-              <button type="button" className="btn btn-primary" onClick={nextStep}>
-                Nästa
-              </button>
-            ) : (
-              <button type="submit" className="btn btn-primary" disabled={loading}>
-                {loading ? 'Skickar...' : 'Skicka anmälan'}
-              </button>
-            )}
-          </div>
-        </form>
-      </div>
-    </PublicLayout>
-  );
 }
+
+export const api = {
+  submitApplication: (payload) => callGoogleAppsScript('submitApplication', payload),
+  getApplications: () => callGoogleAppsScript('getApplications'),
+  getAdminDashboard: () => callGoogleAppsScript('getAdminDashboard'),
+  updateApplicationStatus: (id, status) => callGoogleAppsScript('updateApplicationStatus', id, status),
+  createManualApplication: (payload) => callGoogleAppsScript('createManualApplication', payload),
+  getConsentLog: () => callGoogleAppsScript('getConsentLog'),
+  getConfig: () => callGoogleAppsScript('getConfig'),
+  updateConfig: (key, value) => callGoogleAppsScript('updateConfig', key, value),
+  addAdmin: (email) => callGoogleAppsScript('addAdmin', email),
+  getAdmins: () => callGoogleAppsScript('getAdmins')
+};
+
+export default api;
