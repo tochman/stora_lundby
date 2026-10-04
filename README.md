@@ -1,234 +1,146 @@
-<!DOCTYPE html>
-<html>
-  <head>
-    <base target="_top">
-    <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Stora Lundby - Admin</title>
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        padding: 24px;
-        background: #f7f7f7;
-      }
-      .wrap {
-        max-width: 1200px;
-        margin: 0 auto;
-      }
-      .panel {
-        background: #fff;
-        border-radius: 12px;
-        padding: 24px;
-        margin-bottom: 20px;
-        box-shadow: 0 1px 8px rgba(0,0,0,0.08);
-      }
-      .summary {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-        gap: 16px;
-        margin-bottom: 20px;
-      }
-      .card {
-        background: #f2f5ff;
-        border-radius: 10px;
-        padding: 16px;
-      }
-      .card strong {
-        display: block;
-        font-size: 30px;
-      }
-      table {
-        width: 100%;
-        border-collapse: collapse;
-      }
-      th, td {
-        padding: 10px 8px;
-        border-bottom: 1px solid #e2e2e2;
-        text-align: left;
-        vertical-align: top;
-      }
-      th {
-        background: #f1f1f1;
-      }
-      select, input, button {
-        padding: 8px 10px;
-        border-radius: 8px;
-        border: 1px solid #cfcfcf;
-        font-size: 14px;
-      }
-      button {
-        background: #1a73e8;
-        color: #fff;
-        border: none;
-        cursor: pointer;
-      }
-      .small {
-        font-size: 12px;
-        color: #555;
-      }
-      .grid {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(180px,1fr));
-        gap: 16px;
-      }
-      label {
-        display: block;
-        margin-top: 12px;
-        margin-bottom: 6px;
-        font-weight: 600;
-      }
-      .status-select {
-        min-width: 120px;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="wrap">
-      <h1>Stora Lundby - Admin</h1>
+# Stora Lundby - Föräldraengagemang
 
-      <div class="panel">
-        <h2>Översikt</h2>
-        <div class="summary">
-          <div class="card"><span>Totalt</span><strong id="totalCount">0</strong></div>
-          <div class="card"><span>Nya</span><strong id="newCount">0</strong></div>
-          <div class="card"><span>Volontärer</span><strong id="volunteerCount">0</strong></div>
-          <div class="card"><span>Hjälp</span><strong id="helpCount">0</strong></div>
-        </div>
-      </div>
+Ett flexibelt system för att hantera föräldraengagemang, volontärarbete och stödbehov för Stora Lundby Scoutkår.
 
-      <div class="panel">
-        <h2>Lägg till manuell anmälan</h2>
-        <div class="grid">
-          <div>
-            <label for="manualName">Namn</label>
-            <input id="manualName" type="text">
-          </div>
-          <div>
-            <label for="manualEmail">E-post</label>
-            <input id="manualEmail" type="email">
-          </div>
-          <div>
-            <label for="manualPhone">Telefon</label>
-            <input id="manualPhone" type="tel">
-          </div>
-          <div>
-            <label for="manualType">Typ</label>
-            <select id="manualType">
-              <option value="need-help">Behov av hjälp</option>
-              <option value="volunteer">Volontär</option>
-              <option value="organizer">Ansvarig</option>
-            </select>
-          </div>
-          <div>
-            <label for="manualYear">År</label>
-            <input id="manualYear" type="text" value="2026">
-          </div>
-          <div>
-            <label for="manualTerm">Termin</label>
-            <input id="manualTerm" type="text" value="Höst">
-          </div>
-        </div>
-        <div style="margin-top:16px;">
-          <button id="addManualBtn">Skapa anmälan</button>
-        </div>
-      </div>
+## 🚀 Funktionalitet
 
-      <div class="panel">
-        <h2>Anmälningar</h2>
-        <table>
-          <thead>
-            <tr>
-              <th>Namn</th>
-              <th>Typ</th>
-              <th>År/Termin</th>
-              <th>Telefon</th>
-              <th>E-post</th>
-              <th>Status</th>
-              <th>Samtycke</th>
-            </tr>
-          </thead>
-          <tbody id="applicationRows"></tbody>
-        </table>
-      </div>
-    </div>
+- **Publikt formulär**: Wizard-baserat flöde för föräldrar och volontärer
+- **Admin-dashboard**: Hantera anmälningar, uppdatera status, se samtyckeslogg
+- **GDPR-compliant**: Separat samtyckeslogg, transparent datakälla
+- **Flexibel**: Stöd för flera år och terminer
+- **Google Sheets-integration**: Data lagras i Google Sheets via Google Apps Script
 
-    <script>
-      function renderSummary(summary) {
-        document.getElementById('totalCount').textContent = summary.total || 0;
-        document.getElementById('newCount').textContent = summary.newCount || 0;
-        document.getElementById('volunteerCount').textContent = summary.volunteerCount || 0;
-        document.getElementById('helpCount').textContent = summary.helpCount || 0;
-      }
+## 📋 Förutsättningar
 
-      function renderRows(rows) {
-        const tableBody = document.getElementById('applicationRows');
-        tableBody.innerHTML = '';
+- Node.js 16+ och npm
+- Google-konto med Google Apps Script-projekt
+- Netlify-konto (för deployment)
 
-        rows.forEach(function (item) {
-          const tr = document.createElement('tr');
-          const statusList = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
-          const statusSelect = document.createElement('select');
-          statusList.forEach(function (status) {
-            const option = document.createElement('option');
-            option.value = status;
-            option.textContent = status;
-            if (String(item.status || 'Ny') === status) option.selected = true;
-            statusSelect.appendChild(option);
-          });
+## 🛠️ Lokal utveckling
 
-          statusSelect.className = 'status-select';
-          statusSelect.addEventListener('change', function () {
-            google.script.run.withSuccessHandler(function () {
-              loadData();
-            }).updateApplicationStatus(item.id, statusSelect.value);
-          });
+### 1. Installera dependencies
 
-          tr.innerHTML = '<td>' + (item.name || '') + '</td>'
-            + '<td>' + (item.engagementType || '') + '</td>'
-            + '<td>' + (item.year || '') + ' / ' + (item.term || '') + '</td>'
-            + '<td>' + (item.phone || '') + '</td>'
-            + '<td>' + (item.email || '') + '</td>';
+```bash
+npm install
+```
 
-          const statusCell = document.createElement('td');
-          statusCell.appendChild(statusSelect);
-          tr.appendChild(statusCell);
+### 2. Starta utvecklingsserver
 
-          const consentCell = document.createElement('td');
-          consentCell.textContent = String(item.consentGiven || '').toUpperCase() === 'TRUE' ? 'Ja' : 'Nej';
-          tr.appendChild(consentCell);
+```bash
+npm run dev
+```
 
-          tableBody.appendChild(tr);
-        });
-      }
+Appen körs på `http://localhost:5173`.
 
-      function loadData() {
-        google.script.run.withSuccessHandler(function (data) {
-          renderSummary(data.summary || { total: 0, newCount: 0, volunteerCount: 0, helpCount: 0 });
-          renderRows(data.rows || []);
-        }).getAdminDashboard();
-      }
+### 3. Google Apps Script - lokal setup
 
-      document.getElementById('addManualBtn').addEventListener('click', function () {
-        const payload = {
-          name: document.getElementById('manualName').value,
-          email: document.getElementById('manualEmail').value,
-          phone: document.getElementById('manualPhone').value,
-          engagementType: document.getElementById('manualType').value,
-          year: document.getElementById('manualYear').value,
-          term: document.getElementById('manualTerm').value,
-          status: 'Ny',
-          consent: true
-        };
+Om du vill testa mot riktig Google Sheets-data:
 
-        google.script.run.withSuccessHandler(function () {
-          loadData();
-          document.getElementById('manualName').value = '';
-          document.getElementById('manualEmail').value = '';
-          document.getElementById('manualPhone').value = '';
-        }).createManualApplication(payload);
-      });
+1. **Skapa ett Google Apps Script-projekt**
+   - Gå till [script.google.com](https://script.google.com)
+   - Klicka "Nytt projekt"
+   - Koda in filen `src/utils/googleAppsScriptBackend.gs` (finns i repot)
 
-      loadData();
-    </script>
-  </body>
-</html>
+2. **Skapa en Google Sheet**
+   - Skapa en ny Google Sheet
+   - Kopiera dess ID från URL:en
+   - I Apps Script-projektet, gå till "Projektinställningar"
+   - Spara Sheet-ID:t i script properties
+
+3. **Publicera Apps Script som web app**
+   - I Apps Script, klicka "Distribuera" → "Ny distribution"
+   - Välj typ "Web app"
+   - "Kör som": Din Google-konto
+   - "Vem har åtkomst": "Vem som helst"
+   - Kopiera URL:en för web appen
+
+4. **Uppdatera API-wrapper** (valfritt för lokal test)
+   - Ändra `src/utils/googleAppsScriptApi.js` för att peka på din web app-URL
+
+## 📦 Build och deployment
+
+### Bygga för produktion
+
+```bash
+npm run build
+```
+
+Det skapar en `dist/`-mapp med optimerad kod.
+
+### Deploy till Netlify
+
+#### Alternativ 1: Via CLI
+
+```bash
+npm install -g netlify-cli
+netlify login
+netlify deploy --prod
+```
+
+#### Alternativ 2: Via GitHub (rekommenderat)
+
+1. Push koden till GitHub
+2. Länka repot till Netlify
+   - Gå till [app.netlify.com](https://app.netlify.com)
+   - Klicka "Add new site" → "Import an existing project"
+   - Välj GitHub-repot
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+3. Netlify bygger och deployr automatiskt vid varje push
+
+## 🔗 Koppla public och admin
+
+### Public form (Netlify)
+
+1. Din Netlify-deploy URL är den publika formulärsidan
+2. Dela denna URL med föräldrar/volontärer
+3. Formuläret skickar data till Google Apps Script
+
+### Admin-dashboard (Google Apps Script web app)
+
+1. Publisera admin-sidan i Google Apps Script
+2. Admin-sidan kräver Google-konto-autentisering
+3. Admin kan se alla inlämningar direkt i Google Sheets
+
+## 🗄️ Datastruktur
+
+Google Sheets innehåller följande flikar:
+
+- **Applications**: Alla inlämningar
+  - id, createdAt, year, term, engagementType, supportArea, name, phone, email, childName, childClass, comments, status, consentGiven, consentAt, consentVersion
+
+- **ConsentLog**: Separat logg för GDPR-samtycke
+  - applicationId, personName, email, consentGivenAt, consentVersion, consentText, source
+
+- **Config**: Konfigurationsvärden
+  - currentYear, currentTerm, consentVersion, consentText
+
+- **Admins**: Admin-användare
+  - email, role, active
+
+## 📝 Environment-variabler (valfritt)
+
+Om du vill anpassa API-endpoints, skapa en `.env`-fil:
+
+```
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/d/.../usercontent
+```
+
+## 🚀 Nästa steg
+
+1. **Miljö-specifika inställningar**
+   - Skapa separate Google Apps Script-projekt för dev/prod
+   - Använd environment-variabler för endpoints
+
+2. **E-postbekräftelser** (valfritt)
+   - Integrera Gmail API för att skicka bekräftelsemail
+
+3. **Dataimport**
+   - Skapa funktion för att importera befintliga anmälningar från gamla formulär
+
+4. **Rapporter**
+   - Lägg till möjlighet för admin att exportera till CSV/PDF
+
+## 📞 Support
+
+Kontakta projektledaren för frågor om setup eller integration.
