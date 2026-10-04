@@ -1,166 +1,146 @@
-import { useState, useMemo, useEffect } from 'react';
-import api from '../utils/googleAppsScriptApi';
-import { AdminLayout } from './Layout';
+# Stora Lundby - Föräldraengagemang
 
-const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
+Ett flexibelt system för att hantera föräldraengagemang, volontärarbete och stödbehov för Stora Lundby Scoutkår.
 
-export default function AdminDashboard() {
-  const [applications, setApplications] = useState([]);
-  const [filter, setFilter] = useState({ status: 'all', type: 'all' });
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+## 🚀 Funktionalitet
 
-  const loadDashboard = async () => {
-    try {
-      setLoading(true);
-      const dashboard = await api.getAdminDashboard();
-      setApplications(dashboard.rows || []);
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Kunde inte ladda data.');
-    } finally {
-      setLoading(false);
-    }
-  };
+- **Publikt formulär**: Wizard-baserat flöde för föräldrar och volontärer
+- **Admin-dashboard**: Hantera anmälningar, uppdatera status, se samtyckeslogg
+- **GDPR-compliant**: Separat samtyckeslogg, transparent datakälla
+- **Flexibel**: Stöd för flera år och terminer
+- **Google Sheets-integration**: Data lagras i Google Sheets via Google Apps Script
 
-  useEffect(() => {
-    loadDashboard();
-  }, []);
+## 📋 Förutsättningar
 
-  const filtered = useMemo(() => {
-    return applications.filter((app) => {
-      if (filter.status !== 'all' && app.status !== filter.status) return false;
-      if (filter.type !== 'all' && app.engagementType !== filter.type) return false;
-      return true;
-    });
-  }, [applications, filter]);
+- Node.js 16+ och npm
+- Google-konto med Google Apps Script-projekt
+- Netlify-konto (för deployment)
 
-  const summary = {
-    total: applications.length,
-    newCount: applications.filter((item) => String(item.status).toLowerCase() === 'ny').length,
-    volunteerCount: applications.filter((item) => String(item.engagementType).toLowerCase() === 'volunteer').length,
-    helpCount: applications.filter((item) => String(item.engagementType).toLowerCase() === 'need-help').length
-  };
+## 🛠️ Lokal utveckling
 
-  const setStatus = async (id, nextStatus) => {
-    try {
-      await api.updateApplicationStatus(id, nextStatus);
-      await loadDashboard();
-    } catch (err) {
-      setError(err.message || 'Kunde inte uppdatera status.');
-    }
-  };
+### 1. Installera dependencies
 
-  if (loading) {
-    return (
-      <AdminLayout>
-        <div className="card">Laddar...</div>
-      </AdminLayout>
-    );
-  }
+```bash
+npm install
+```
 
-  return (
-    <AdminLayout>
-      <div className="space-y-6">
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-        )}
+### 2. Starta utvecklingsserver
 
-        <section className="grid gap-4 md:grid-cols-4">
-          <div className="card border-l-4 border-brand-500 bg-brand-50">
-            <div className="text-sm text-slate-600">Totalt</div>
-            <div className="mt-2 text-3xl font-bold text-brand-500">{summary.total}</div>
-          </div>
-          <div className="card border-l-4 border-yellow-500 bg-yellow-50">
-            <div className="text-sm text-slate-600">Nya</div>
-            <div className="mt-2 text-3xl font-bold text-yellow-500">{summary.newCount}</div>
-          </div>
-          <div className="card border-l-4 border-green-500 bg-green-50">
-            <div className="text-sm text-slate-600">Volontärer</div>
-            <div className="mt-2 text-3xl font-bold text-green-500">{summary.volunteerCount}</div>
-          </div>
-          <div className="card border-l-4 border-violet-500 bg-violet-50">
-            <div className="text-sm text-slate-600">Behöver hjälp</div>
-            <div className="mt-2 text-3xl font-bold text-violet-500">{summary.helpCount}</div>
-          </div>
-        </section>
+```bash
+npm run dev
+```
 
-        <section className="card">
-          <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <h2 className="text-xl font-bold text-slate-800">Anmälningar</h2>
-            <div className="flex gap-3">
-              <select
-                value={filter.status}
-                onChange={(e) => setFilter((prev) => ({ ...prev, status: e.target.value }))}
-                className="input w-auto"
-              >
-                <option value="all">Alla statusar</option>
-                {statusOptions.map((status) => (
-                  <option key={status} value={status}>{status}</option>
-                ))}
-              </select>
+Appen körs på `http://localhost:5173`.
 
-              <select
-                value={filter.type}
-                onChange={(e) => setFilter((prev) => ({ ...prev, type: e.target.value }))}
-                className="input w-auto"
-              >
-                <option value="all">Alla typer</option>
-                <option value="need-help">Behöver hjälp</option>
-                <option value="volunteer">Volontär</option>
-                <option value="organizer">Ansvarig</option>
-              </select>
-            </div>
-          </div>
+### 3. Google Apps Script - lokal setup
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-left">
-              <thead className="border-b border-slate-200">
-                <tr>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Namn</th>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Typ</th>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">År / termin</th>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">E-post</th>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Status</th>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Samtycke</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.length === 0 ? (
-                  <tr>
-                    <td className="px-3 py-6 text-center text-sm text-slate-500" colSpan={6}>Inga anmälningar hittades.</td>
-                  </tr>
-                ) : (
-                  filtered.map((app) => (
-                    <tr key={app.id} className="border-b border-slate-200">
-                      <td className="px-3 py-3 text-sm text-slate-800">{app.name}</td>
-                      <td className="px-3 py-3 text-sm text-slate-600">{app.engagementType}</td>
-                      <td className="px-3 py-3 text-sm text-slate-600">{app.year} / {app.term}</td>
-                      <td className="px-3 py-3 text-sm text-slate-600">{app.email}</td>
-                      <td className="px-3 py-3 text-sm">
-                        <select
-                          value={app.status || 'Ny'}
-                          onChange={(e) => setStatus(app.id, e.target.value)}
-                          className="rounded border border-slate-300 bg-white px-2 py-1 text-sm"
-                        >
-                          {statusOptions.map((status) => (
-                            <option key={status} value={status}>{status}</option>
-                          ))}
-                        </select>
-                      </td>
-                      <td className="px-3 py-3 text-sm">
-                        <span className={`inline-flex rounded-full px-2 py-1 font-semibold ${String(app.consentGiven).toUpperCase() === 'TRUE' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-                          {String(app.consentGiven).toUpperCase() === 'TRUE' ? 'Ja' : 'Nej'}
-                        </span>
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-        </section>
-      </div>
-    </AdminLayout>
-  );
-}
+Om du vill testa mot riktig Google Sheets-data:
+
+1. **Skapa ett Google Apps Script-projekt**
+   - Gå till [script.google.com](https://script.google.com)
+   - Klicka "Nytt projekt"
+   - Koda in filen `src/utils/googleAppsScriptBackend.gs` (finns i repot)
+
+2. **Skapa en Google Sheet**
+   - Skapa en ny Google Sheet
+   - Kopiera dess ID från URL:en
+   - I Apps Script-projektet, gå till "Projektinställningar"
+   - Spara Sheet-ID:t i script properties
+
+3. **Publicera Apps Script som web app**
+   - I Apps Script, klicka "Distribuera" → "Ny distribution"
+   - Välj typ "Web app"
+   - "Kör som": Din Google-konto
+   - "Vem har åtkomst": "Vem som helst"
+   - Kopiera URL:en för web appen
+
+4. **Uppdatera API-wrapper** (valfritt för lokal test)
+   - Ändra `src/utils/googleAppsScriptApi.js` för att peka på din web app-URL
+
+## 📦 Build och deployment
+
+### Bygga för produktion
+
+```bash
+npm run build
+```
+
+Det skapar en `dist/`-mapp med optimerad kod.
+
+### Deploy till Netlify
+
+#### Alternativ 1: Via CLI
+
+```bash
+npm install -g netlify-cli
+netlify login
+netlify deploy --prod
+```
+
+#### Alternativ 2: Via GitHub (rekommenderat)
+
+1. Push koden till GitHub
+2. Länka repot till Netlify
+   - Gå till [app.netlify.com](https://app.netlify.com)
+   - Klicka "Add new site" → "Import an existing project"
+   - Välj GitHub-repot
+   - Build command: `npm run build`
+   - Publish directory: `dist`
+3. Netlify bygger och deployr automatiskt vid varje push
+
+## 🔗 Koppla public och admin
+
+### Public form (Netlify)
+
+1. Din Netlify-deploy URL är den publika formulärsidan
+2. Dela denna URL med föräldrar/volontärer
+3. Formuläret skickar data till Google Apps Script
+
+### Admin-dashboard (Google Apps Script web app)
+
+1. Publisera admin-sidan i Google Apps Script
+2. Admin-sidan kräver Google-konto-autentisering
+3. Admin kan se alla inlämningar direkt i Google Sheets
+
+## 🗄️ Datastruktur
+
+Google Sheets innehåller följande flikar:
+
+- **Applications**: Alla inlämningar
+  - id, createdAt, year, term, engagementType, supportArea, name, phone, email, childName, childClass, comments, status, consentGiven, consentAt, consentVersion
+
+- **ConsentLog**: Separat logg för GDPR-samtycke
+  - applicationId, personName, email, consentGivenAt, consentVersion, consentText, source
+
+- **Config**: Konfigurationsvärden
+  - currentYear, currentTerm, consentVersion, consentText
+
+- **Admins**: Admin-användare
+  - email, role, active
+
+## 📝 Environment-variabler (valfritt)
+
+Om du vill anpassa API-endpoints, skapa en `.env`-fil:
+
+```
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/d/.../usercontent
+```
+
+## 🚀 Nästa steg
+
+1. **Miljö-specifika inställningar**
+   - Skapa separate Google Apps Script-projekt för dev/prod
+   - Använd environment-variabler för endpoints
+
+2. **E-postbekräftelser** (valfritt)
+   - Integrera Gmail API för att skicka bekräftelsemail
+
+3. **Dataimport**
+   - Skapa funktion för att importera befintliga anmälningar från gamla formulär
+
+4. **Rapporter**
+   - Lägg till möjlighet för admin att exportera till CSV/PDF
+
+## 📞 Support
+
+Kontakta projektledaren för frågor om setup eller integration.
