@@ -178,6 +178,21 @@ describe('config round trip', () => {
     ctx.context.setConfigValue('brandNewKey', 'hello');
     expect(ctx.context.getConfigValue('brandNewKey')).toBe('hello');
   });
+
+  it('normalizes a Date-typed cell back to plain yyyy-MM-dd', () => {
+    // Sheets auto-converts a date-like string ("2026-09-17") typed into a
+    // cell into a real Date value even via Range.setValue - simulate that
+    // happening to the submissionDeadline row directly, bypassing
+    // setConfigValue (which only ever receives what Code.gs passes it).
+    // Must be the vm context's own Date constructor, not the host's - Code.gs
+    // runs in a separate realm, and `instanceof Date` is realm-specific.
+    const configSheet = ctx.spreadsheet.getSheetByName('Config');
+    const rowIndex = configSheet.rows.findIndex((row) => row[0] === 'submissionDeadline');
+    configSheet.rows[rowIndex][1] = ctx.context.__makeDate('2026-09-17T00:00:00.000Z');
+
+    expect(ctx.context.getConfigValue('submissionDeadline')).toBe('2026-09-17');
+    expect(ctx.context.getPublicConfig().submissionDeadline).toBe('2026-09-17');
+  });
 });
 
 describe('purgeTermData', () => {

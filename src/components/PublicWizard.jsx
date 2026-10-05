@@ -12,7 +12,10 @@ const SWEDISH_MONTHS = [
 
 function formatActivityDate(isoDate) {
   if (!isoDate) return '';
-  const [year, month, day] = isoDate.split('-').map(Number);
+  // Tolerates a full ISO datetime (e.g. if a value ever comes back as a
+  // serialized Date instead of plain yyyy-MM-dd) by only looking at the
+  // date portion before any "T".
+  const [year, month, day] = String(isoDate).split('T')[0].split('-').map(Number);
   if (!year || !month || !day) return isoDate;
   return `${day} ${SWEDISH_MONTHS[month - 1]}`;
 }

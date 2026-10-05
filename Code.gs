@@ -314,13 +314,24 @@ function sheetRowsAsObjects(sheetName) {
 // Config
 // ---------------------------------------------------------------------------
 
+// A value like "2026-09-17" typed into a Config row gets auto-converted to
+// a real Date cell by Sheets (locale-aware date detection applies even
+// through Range.setValue) - normalize it back to plain yyyy-MM-dd text so
+// the frontend's date parsing never sees a Date-shaped value.
+function normalizeConfigValue(value) {
+  if (value instanceof Date) {
+    return Utilities.formatDate(value, 'Europe/Stockholm', 'yyyy-MM-dd');
+  }
+  return value;
+}
+
 function getConfigValue(key, defaultValue) {
   var configSheet = getSheetByName(SHEET_NAMES.config);
   var values = configSheet.getDataRange().getValues();
   for (var i = 1; i < values.length; i += 1) {
     var row = values[i];
     if (String(row[0]).trim().toLowerCase() === String(key).trim().toLowerCase()) {
-      return row[1];
+      return normalizeConfigValue(row[1]);
     }
   }
   return defaultValue;
@@ -343,7 +354,7 @@ function getPublicConfig() {
   var values = configSheet.getDataRange().getValues();
   var config = {};
   for (var i = 1; i < values.length; i += 1) {
-    config[values[i][0]] = values[i][1];
+    config[values[i][0]] = normalizeConfigValue(values[i][1]);
   }
   return config;
 }

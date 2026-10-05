@@ -92,7 +92,11 @@ export function createCodeGsContext() {
         let counter = 0;
         return () => `uuid-${(counter += 1)}`;
       })(),
-      formatDate: (date) => (date instanceof Date ? date.toISOString().slice(0, 10) : String(date))
+      // Duck-typed rather than `date instanceof Date`: this mock is defined
+      // in the host realm, but dates passed in from Code.gs belong to the
+      // vm context's own realm, so an instanceof check here would always
+      // be false even for a real Date.
+      formatDate: (date) => (date && typeof date.toISOString === 'function' ? date.toISOString().slice(0, 10) : String(date))
     },
     ContentService: {
       MimeType: { JSON: 'JSON' },
@@ -118,6 +122,11 @@ export function createCodeGsContext() {
   vm.createContext(context);
   const source = fs.readFileSync(CODE_GS_PATH, 'utf-8');
   vm.runInContext(source, context, { filename: 'Code.gs' });
+
+  // Exposed so tests can construct a Date belonging to this vm context's own
+  // realm - `instanceof Date` inside Code.gs only matches dates created
+  // with *this* context's Date constructor, not the host realm's.
+  context.__makeDate = vm.runInContext('(function (iso) { return new Date(iso); })', context);
 
   return { context, spreadsheet, sentEmails, tokenInfo };
 }
