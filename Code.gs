@@ -100,9 +100,24 @@ function handleAction(action, params) {
     case 'addAdmin':
       requireAdmin(params);
       return addAdmin(params.email);
+    case 'setAdminActive':
+      requireAdmin(params);
+      return setAdminActive(params.email, params.active);
     case 'updateConfig':
       requireAdmin(params);
       return updateConfigEntries(params.updates || {});
+    case 'getActivitiesAdmin':
+      requireAdmin(params);
+      return getActivitiesRaw();
+    case 'upsertActivity':
+      requireAdmin(params);
+      return upsertActivity(params.activity || {});
+    case 'deleteActivity':
+      requireAdmin(params);
+      return deleteActivity(params.id);
+    case 'copyActivities':
+      requireAdmin(params);
+      return copyActivities(params.fromYear, params.fromTerm, params.toYear, params.toTerm);
     default:
       throw new Error('Okänd åtgärd: ' + action);
   }
@@ -360,6 +375,85 @@ function getActivities(year, term) {
     .sort(function (a, b) { return a.sortOrder - b.sortOrder; });
 }
 
+function upsertActivity(activity) {
+  if (!activity.label) {
+    throw new Error('Aktiviteten måste ha en rubrik.');
+  }
+  var sheet = getSheetByName(SHEET_NAMES.activities);
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idCol = headers.indexOf('id');
+  var id = activity.id || Utilities.getUuid();
+
+  var rowValues = headers.map(function (header) {
+    if (header === 'id') return id;
+    if (header === 'active') return activity.active === false ? 'FALSE' : 'TRUE';
+    return activity[header] !== undefined && activity[header] !== null ? activity[header] : '';
+  });
+
+  for (var i = 1; i < values.length; i += 1) {
+    if (String(values[i][idCol]) === String(id)) {
+      sheet.getRange(i + 1, 1, 1, rowValues.length).setValues([rowValues]);
+      return { ok: true, id: id };
+    }
+  }
+
+  sheet.appendRow(rowValues);
+  return { ok: true, id: id };
+}
+
+function deleteActivity(id) {
+  if (!id) {
+    throw new Error('Id krävs.');
+  }
+  var sheet = getSheetByName(SHEET_NAMES.activities);
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var idCol = headers.indexOf('id');
+
+  for (var i = 1; i < values.length; i += 1) {
+    if (String(values[i][idCol]) === String(id)) {
+      sheet.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  throw new Error('Hittade ingen aktivitet med id ' + id);
+}
+
+function copyActivities(fromYear, fromTerm, toYear, toTerm) {
+  if (!fromYear || !fromTerm || !toYear || !toTerm) {
+    throw new Error('Alla fyra fält (från/till år och termin) krävs.');
+  }
+  var source = getActivitiesRaw().filter(function (activity) {
+    return activity.category !== 'standing-role' &&
+      String(activity.year) === String(fromYear) &&
+      String(activity.term) === String(fromTerm);
+  });
+
+  if (source.length === 0) {
+    throw new Error('Hittade inga aktiviteter för ' + fromTerm + ' ' + fromYear + ' att kopiera.');
+  }
+
+  source.forEach(function (activity) {
+    upsertActivity({
+      id: Utilities.getUuid(),
+      year: toYear,
+      term: toTerm,
+      category: activity.category,
+      label: activity.label,
+      date: '',
+      startTime: activity.startTime,
+      endTime: activity.endTime,
+      location: activity.location,
+      capacity: activity.capacity === null ? '' : activity.capacity,
+      active: true,
+      sortOrder: activity.sortOrder
+    });
+  });
+
+  return { ok: true, copied: source.length };
+}
+
 // ---------------------------------------------------------------------------
 // Applications
 // ---------------------------------------------------------------------------
@@ -569,6 +663,21 @@ function addAdmin(email) {
   }
   adminSheet.appendRow([email, 'admin', 'TRUE']);
   return { ok: true };
+}
+
+function setAdminActive(email, active) {
+  if (!email) {
+    throw new Error('E-post krävs.');
+  }
+  var adminSheet = getSheetByName(SHEET_NAMES.admins);
+  var values = adminSheet.getDataRange().getValues();
+  for (var i = 1; i < values.length; i += 1) {
+    if (String(values[i][0]).trim().toLowerCase() === String(email).trim().toLowerCase()) {
+      adminSheet.getRange(i + 1, 3).setValue(active ? 'TRUE' : 'FALSE');
+      return { ok: true };
+    }
+  }
+  throw new Error('Hittade ingen admin med e-post ' + email);
 }
 
 // ---------------------------------------------------------------------------

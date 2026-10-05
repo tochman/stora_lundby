@@ -8,9 +8,18 @@ import {
   renderGoogleSignInButton,
   storeIdToken
 } from '../utils/googleAuth';
+import { buildActivityRosterCsv, downloadCsv } from '../utils/csv';
 import { AdminLayout } from './Layout';
+import ActivitiesManager from './admin/ActivitiesManager';
+import AdminsManager from './admin/AdminsManager';
+import ManualEntryForm from './admin/ManualEntryForm';
 
 const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
+const views = [
+  { id: 'applications', label: 'Anmälningar' },
+  { id: 'activities', label: 'Aktiviteter' },
+  { id: 'admins', label: 'Admins' }
+];
 
 function isAuthError(message) {
   if (!message) return false;
@@ -64,6 +73,8 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notesDraft, setNotesDraft] = useState({});
+  const [view, setView] = useState('applications');
+  const [showManualEntry, setShowManualEntry] = useState(false);
 
   const profile = useMemo(() => (idToken ? decodeJwt(idToken) : null), [idToken]);
 
@@ -153,11 +164,29 @@ export default function AdminDashboard() {
           </button>
         </div>
 
+        <nav className="flex gap-2 border-b border-slate-200">
+          {views.map((v) => (
+            <button
+              key={v.id}
+              type="button"
+              onClick={() => setView(v.id)}
+              className={`px-4 py-2 text-sm font-semibold ${
+                view === v.id ? 'border-b-2 border-brand-500 text-brand-600' : 'text-slate-500 hover:text-slate-700'
+              }`}
+            >
+              {v.label}
+            </button>
+          ))}
+        </nav>
+
         {error && (
           <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
         )}
 
-        {summary && (
+        {view === 'activities' && <ActivitiesManager idToken={idToken} />}
+        {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}
+
+        {view === 'applications' && summary && (
           <section className="grid gap-4 md:grid-cols-4">
             <div className="card border-l-4 border-brand-500 bg-brand-50">
               <div className="text-sm text-slate-600">Totalt</div>
@@ -178,10 +207,30 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {view === 'applications' && showManualEntry && (
+          <ManualEntryForm
+            activities={activities}
+            idToken={idToken}
+            onCancel={() => setShowManualEntry(false)}
+            onSaved={() => { setShowManualEntry(false); loadDashboard(idToken); }}
+          />
+        )}
+
+        {view === 'applications' && (
         <section className="card">
           <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
             <h2 className="text-xl font-bold text-slate-800">Anmälningar</h2>
             <div className="flex flex-wrap gap-3">
+              <button type="button" className="btn btn-secondary" onClick={() => setShowManualEntry((v) => !v)}>
+                + Lägg till manuellt
+              </button>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => downloadCsv('anmalningar.csv', buildActivityRosterCsv(filtered, activities))}
+              >
+                Exportera CSV
+              </button>
               <input
                 type="text"
                 placeholder="Sök namn, e-post, scout..."
@@ -288,6 +337,7 @@ export default function AdminDashboard() {
             </table>
           </div>
         </section>
+        )}
       </div>
     </AdminLayout>
   );
