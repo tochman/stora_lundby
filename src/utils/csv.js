@@ -10,11 +10,11 @@ function rowsToCsv(rows) {
   return rows.map((row) => row.map(escapeCsvCell).join(',')).join('\r\n');
 }
 
-// One row per (activity, guardian) pair, sorted by activity so the sheet
+// One row per (activity, participant) pair, sorted by activity so the sheet
 // can be printed as a roster per market shift / workday / etc.
 export function buildActivityRosterCsv(applications, activities) {
   const activityById = Object.fromEntries(activities.map((a) => [a.id, a]));
-  const header = ['Aktivitet', 'Datum', 'Tid', 'Plats', 'Vårdnadshavare', 'Telefon', 'Scout', 'Avdelning'];
+  const header = ['Aktivitet', 'Datum', 'Tid', 'Plats', 'Deltagare', 'Telefon', 'Scout', 'Avdelning'];
 
   const rows = applications.flatMap((app) =>
     (app.selectedActivities || []).map((activityId) => {

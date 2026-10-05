@@ -276,7 +276,7 @@ export default function AdminDashboard() {
             <table className="min-w-full text-left">
               <thead className="border-b border-slate-200">
                 <tr>
-                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Vårdnadshavare</th>
+                  <th className="px-3 py-3 text-sm font-semibold text-slate-700">Deltagare</th>
                   <th className="px-3 py-3 text-sm font-semibold text-slate-700">Scout / avdelning</th>
                   <th className="px-3 py-3 text-sm font-semibold text-slate-700">Aktiviteter</th>
                   <th className="px-3 py-3 text-sm font-semibold text-slate-700">Status</th>
@@ -346,7 +346,7 @@ export default function AdminDashboard() {
                               saveNotes(app.id);
                             }
                           }}
-                          placeholder="Intern anteckning (visas ej för vårdnadshavare)"
+                          placeholder="Intern anteckning (visas ej för användare)"
                         />
                       </td>
                     </tr>
@@ -355,7 +355,7 @@ export default function AdminDashboard() {
                         <td colSpan={6} className="px-3 py-3 text-sm text-slate-700">
                           <div className="grid gap-3 sm:grid-cols-2">
                             <div>
-                              <span className="font-semibold text-slate-600">Kommentar från vårdnadshavare:</span>
+                              <span className="font-semibold text-slate-600">Kommentar:</span>
                               <p className="mt-1 text-slate-600">{app.comments || '(ingen kommentar)'}</p>
                             </div>
                             <div className="text-slate-600">

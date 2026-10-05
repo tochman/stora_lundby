@@ -16,7 +16,7 @@ describe('buildActivityRosterCsv', () => {
     const csv = buildActivityRosterCsv(applications, activities);
     const rows = csv.split('\r\n');
 
-    expect(rows[0]).toBe('Aktivitet,Datum,Tid,Plats,Vårdnadshavare,Telefon,Scout,Avdelning');
+    expect(rows[0]).toBe('Aktivitet,Datum,Tid,Plats,Deltagare,Telefon,Scout,Avdelning');
     // Three data rows total (Bea x1 + Anna x2), grouped/sorted by activity sortOrder.
     expect(rows).toHaveLength(4);
     expect(rows[1]).toContain('Pass 1');
@@ -45,6 +45,6 @@ describe('buildActivityRosterCsv', () => {
 
   it('returns just the header row when there are no applications', () => {
     const csv = buildActivityRosterCsv([], activities);
-    expect(csv).toBe('Aktivitet,Datum,Tid,Plats,Vårdnadshavare,Telefon,Scout,Avdelning');
+    expect(csv).toBe('Aktivitet,Datum,Tid,Plats,Deltagare,Telefon,Scout,Avdelning');
   });
 });

@@ -35,7 +35,7 @@ export default function ManualEntryForm({ activities, idToken, onSaved, onCancel
   const handleSubmit = async (event) => {
     event.preventDefault();
     if (!formData.guardianName || !formData.scoutName || !formData.avdelning) {
-      setError('Vårdnadshavarens namn, scoutens namn och avdelning krävs.');
+      setError('Ditt namn, scoutens namn och avdelning krävs.');
       return;
     }
     setSaving(true);
@@ -53,10 +53,10 @@ export default function ManualEntryForm({ activities, idToken, onSaved, onCancel
   return (
     <form onSubmit={handleSubmit} className="card space-y-4">
       <h3 className="text-lg font-bold text-slate-800">Lägg till anmälan manuellt</h3>
-      <p className="text-sm text-slate-500">För en vårdnadshavare som lämnat in pappersblanketten istället för webbformuläret.</p>
+      <p className="text-sm text-slate-500">För en förälder som lämnat in pappersblanketten istället för webbformuläret.</p>
 
       <div className="grid gap-4 md:grid-cols-2">
-        <input className="input" placeholder="Vårdnadshavarens namn" value={formData.guardianName} onChange={(e) => update('guardianName', e.target.value)} required />
+        <input className="input" placeholder="Namn" value={formData.guardianName} onChange={(e) => update('guardianName', e.target.value)} required />
         <input className="input" placeholder="Telefon" value={formData.guardianPhone} onChange={(e) => update('guardianPhone', e.target.value)} />
         <input className="input" placeholder="E-post" type="email" value={formData.guardianEmail} onChange={(e) => update('guardianEmail', e.target.value)} />
         <input className="input" placeholder="Scoutens namn" value={formData.scoutName} onChange={(e) => update('scoutName', e.target.value)} required />

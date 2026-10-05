@@ -352,7 +352,7 @@ export default function PublicWizard() {
 
           {step === 4 && (
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">Uppgifter om mig som vårdnadshavare</h2>
+              <h2 className="text-2xl font-bold text-slate-800">Kontaktuppgifter</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="guardianName">Namn</label>
@@ -368,7 +368,7 @@ export default function PublicWizard() {
                 </div>
               </div>
 
-              <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är vårdnadshavare till följande scout</h2>
+              <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är förälder till följande scout</h2>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
                   <label className="label" htmlFor="scoutName">Namn</label>
