@@ -13,12 +13,14 @@ import { AdminLayout } from './Layout';
 import ActivitiesManager from './admin/ActivitiesManager';
 import AdminsManager from './admin/AdminsManager';
 import ManualEntryForm from './admin/ManualEntryForm';
+import DataRetention from './admin/DataRetention';
 
 const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
 const views = [
   { id: 'applications', label: 'Anmälningar' },
   { id: 'activities', label: 'Aktiviteter' },
-  { id: 'admins', label: 'Admins' }
+  { id: 'admins', label: 'Admins' },
+  { id: 'retention', label: 'Dataskydd' }
 ];
 
 function isAuthError(message) {
@@ -185,6 +187,7 @@ export default function AdminDashboard() {
 
         {view === 'activities' && <ActivitiesManager idToken={idToken} />}
         {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}
+        {view === 'retention' && <DataRetention idToken={idToken} />}
 
         {view === 'applications' && summary && (
           <section className="grid gap-4 md:grid-cols-4">

@@ -44,6 +44,8 @@ let mockApplications = [
   }
 ];
 
+let mockPurgeLog = [];
+
 const mockConsentLog = [
   {
     applicationId: 'demo-1',
@@ -114,6 +116,21 @@ async function mockAction(action, params) {
     }
     case 'getConsentLog':
       return mockConsentLog;
+    case 'purgeTermData': {
+      const before = mockApplications.length;
+      const purgedIds = mockApplications
+        .filter((a) => a.year === params.year && a.term === params.term)
+        .map((a) => a.id);
+      mockApplications = mockApplications.filter((a) => !purgedIds.includes(a.id));
+      const applicationsPurged = before - mockApplications.length;
+      mockPurgeLog = [
+        { purgedAt: new Date().toISOString(), purgedBy: 'admin@example.com', year: params.year, term: params.term, applicationsPurged, consentLogPurged: applicationsPurged },
+        ...mockPurgeLog
+      ];
+      return { ok: true, applicationsPurged, consentLogPurged: applicationsPurged };
+    }
+    case 'getPurgeLog':
+      return mockPurgeLog;
     case 'getAdmins':
       return mockAdmins;
     case 'addAdmin':
@@ -189,6 +206,8 @@ export const api = {
   updateApplicationNotes: (id, internalNotes, idToken) => callAppsScript('updateApplicationNotes', { id, internalNotes, idToken }),
   createManualApplication: (payload, idToken) => callAppsScript('createManualApplication', { payload, idToken }),
   getConsentLog: (idToken) => callAppsScript('getConsentLog', { idToken }),
+  purgeTermData: (year, term, idToken) => callAppsScript('purgeTermData', { year, term, idToken }),
+  getPurgeLog: (idToken) => callAppsScript('getPurgeLog', { idToken }),
   getAdmins: (idToken) => callAppsScript('getAdmins', { idToken }),
   addAdmin: (email, idToken) => callAppsScript('addAdmin', { email, idToken }),
   setAdminActive: (email, active, idToken) => callAppsScript('setAdminActive', { email, active, idToken }),

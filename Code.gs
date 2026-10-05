@@ -11,7 +11,8 @@ var SHEET_NAMES = {
   consentLog: 'ConsentLog',
   config: 'Config',
   admins: 'Admins',
-  activities: 'Activities'
+  activities: 'Activities',
+  purgeLog: 'PurgeLog'
 };
 
 var DEFAULT_ACTIVITIES = [
@@ -94,6 +95,12 @@ function handleAction(action, params) {
     case 'getConsentLog':
       requireAdmin(params);
       return getConsentLogEntries();
+    case 'purgeTermData':
+      var purgingAdmin = requireAdmin(params);
+      return purgeTermData(params.year, params.term, purgingAdmin);
+    case 'getPurgeLog':
+      requireAdmin(params);
+      return getPurgeLogEntries();
     case 'getAdmins':
       requireAdmin(params);
       return getAdmins();
@@ -196,6 +203,7 @@ function initializeProject() {
   var configSheet = ss.getSheetByName(SHEET_NAMES.config);
   var adminSheet = ss.getSheetByName(SHEET_NAMES.admins);
   var activitiesSheet = ss.getSheetByName(SHEET_NAMES.activities);
+  var purgeLogSheet = ss.getSheetByName(SHEET_NAMES.purgeLog);
 
   if (appSheet.getLastRow() === 0) {
     appSheet.appendRow([
@@ -220,6 +228,7 @@ function initializeProject() {
     configSheet.appendRow(['submissionDeadline', '2026-09-17']);
     configSheet.appendRow(['consentVersion', 'v1']);
     configSheet.appendRow(['consentText', 'Jag godkänner att Stora Lundby sparar mina uppgifter för att hantera anmälan och kontakta mig i samband med verksamheten.']);
+    configSheet.appendRow(['retentionPeriodMonths', '24']);
   }
 
   if (adminSheet.getLastRow() === 0) {
@@ -233,6 +242,10 @@ function initializeProject() {
     DEFAULT_ACTIVITIES.forEach(function (row) {
       activitiesSheet.appendRow(row);
     });
+  }
+
+  if (purgeLogSheet.getLastRow() === 0) {
+    purgeLogSheet.appendRow(['purgedAt', 'purgedBy', 'year', 'term', 'applicationsPurged', 'consentLogPurged']);
   }
 }
 
@@ -713,6 +726,61 @@ function getAdminSummary() {
 
 function getConsentLogEntries() {
   return sheetRowsAsObjects(SHEET_NAMES.consentLog).reverse();
+}
+
+// ---------------------------------------------------------------------------
+// Data retention - deletes a term's personal data, keeping only a record
+// that a purge happened (counts, who, when), never the purged data itself.
+// ---------------------------------------------------------------------------
+
+function purgeTermData(year, term, purgedBy) {
+  if (!year || !term) {
+    throw new Error('År och termin krävs för att gallra data.');
+  }
+
+  var appSheet = getSheetByName(SHEET_NAMES.applications);
+  var appValues = appSheet.getDataRange().getValues();
+  var appHeaders = appValues[0];
+  var idCol = appHeaders.indexOf('id');
+  var yearCol = appHeaders.indexOf('year');
+  var termCol = appHeaders.indexOf('term');
+
+  var idsToPurge = [];
+  for (var i = appValues.length - 1; i >= 1; i -= 1) {
+    if (String(appValues[i][yearCol]) === String(year) && String(appValues[i][termCol]) === String(term)) {
+      idsToPurge.push(String(appValues[i][idCol]));
+      appSheet.deleteRow(i + 1);
+    }
+  }
+
+  var consentPurged = 0;
+  if (idsToPurge.length > 0) {
+    var consentSheet = getSheetByName(SHEET_NAMES.consentLog);
+    var consentValues = consentSheet.getDataRange().getValues();
+    var consentHeaders = consentValues[0];
+    var consentIdCol = consentHeaders.indexOf('applicationId');
+    for (var j = consentValues.length - 1; j >= 1; j -= 1) {
+      if (idsToPurge.indexOf(String(consentValues[j][consentIdCol])) !== -1) {
+        consentSheet.deleteRow(j + 1);
+        consentPurged += 1;
+      }
+    }
+  }
+
+  getSheetByName(SHEET_NAMES.purgeLog).appendRow([
+    new Date(),
+    purgedBy || '',
+    year,
+    term,
+    idsToPurge.length,
+    consentPurged
+  ]);
+
+  return { ok: true, applicationsPurged: idsToPurge.length, consentLogPurged: consentPurged };
+}
+
+function getPurgeLogEntries() {
+  return sheetRowsAsObjects(SHEET_NAMES.purgeLog).reverse();
 }
 
 function getAdmins() {
