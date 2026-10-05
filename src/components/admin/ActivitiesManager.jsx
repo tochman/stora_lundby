@@ -98,10 +98,10 @@ export default function ActivitiesManager({ idToken }) {
   const load = async () => {
     try {
       setLoading(true);
-      const [activityList, publicConfig] = await Promise.all([
-        api.getActivitiesAdmin(idToken),
-        api.getConfig()
-      ]);
+      // Sequential, not Promise.all: Apps Script Web Apps don't reliably
+      // handle several concurrent requests from the same client.
+      const activityList = await api.getActivitiesAdmin(idToken);
+      const publicConfig = await api.getConfig();
       setActivities(activityList.sort((a, b) => a.sortOrder - b.sortOrder));
       setConfig(publicConfig);
       setConfigDraft(publicConfig);
