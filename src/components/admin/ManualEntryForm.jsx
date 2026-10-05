@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
+import { AVDELNINGAR } from '../../utils/constants';
 
 const emptyForm = {
   guardianName: '',
@@ -59,7 +60,12 @@ export default function ManualEntryForm({ activities, idToken, onSaved, onCancel
         <input className="input" placeholder="Telefon" value={formData.guardianPhone} onChange={(e) => update('guardianPhone', e.target.value)} />
         <input className="input" placeholder="E-post" type="email" value={formData.guardianEmail} onChange={(e) => update('guardianEmail', e.target.value)} />
         <input className="input" placeholder="Scoutens namn" value={formData.scoutName} onChange={(e) => update('scoutName', e.target.value)} required />
-        <input className="input" placeholder="Avdelning" value={formData.avdelning} onChange={(e) => update('avdelning', e.target.value)} required />
+        <select className="input" value={formData.avdelning} onChange={(e) => update('avdelning', e.target.value)} required>
+          <option value="">Välj avdelning</option>
+          {AVDELNINGAR.map((avdelning) => (
+            <option key={avdelning} value={avdelning}>{avdelning}</option>
+          ))}
+        </select>
       </div>
 
       <div className="space-y-2">

@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
+import { AVDELNINGAR } from '../utils/constants';
 
-const steps = [1, 2, 3, 4];
+const steps = [1, 2, 3, 4, 5];
 
 const SWEDISH_MONTHS = [
   'januari', 'februari', 'mars', 'april', 'maj', 'juni',
@@ -70,8 +71,15 @@ export default function PublicWizard() {
     return () => { cancelled = true; };
   }, []);
 
-  const eventActivities = useMemo(
-    () => activities.filter((activity) => activity.category !== 'standing-role'),
+  // A gift pledge is a different kind of commitment from working a shift -
+  // it gets its own step rather than being just another checkbox in the
+  // same list as market passes and workdays.
+  const workActivities = useMemo(
+    () => activities.filter((activity) => activity.category !== 'standing-role' && activity.category !== 'gift'),
+    [activities]
+  );
+  const giftActivities = useMemo(
+    () => activities.filter((activity) => activity.category === 'gift'),
     [activities]
   );
   const standingRoleActivities = useMemo(
@@ -265,58 +273,84 @@ export default function PublicWizard() {
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {step === 1 && (
-            <div className="space-y-6">
-              <div className="space-y-3">
-                <h2 className="text-2xl font-bold text-slate-800">Kryssa i vad du kan hjälpa till med</h2>
-                <div className="space-y-2">
-                  {eventActivities.map((activity) => (
-                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold text-slate-800">Kryssa i vad du kan hjälpa till med</h2>
+              <p className="text-sm text-slate-500">Marknadspass, förberedelser, arbetsdag och pysseldag.</p>
+              <div className="space-y-2">
+                {workActivities.map((activity) => (
+                  <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                      checked={formData.selectedActivities.includes(activity.id)}
+                      onChange={() => toggleActivity(activity.id)}
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
+                      <span className="block text-slate-600">{activity.label}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 2 && (
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold text-slate-800">Gåva till lotteriet</h2>
+              <p className="text-sm text-slate-500">
+                Skänker du en vinst till lotteriet? Kryssa i vilken/vilka marknader och lämna in gåvan på angiven tid.
+              </p>
+              <div className="space-y-2">
+                {giftActivities.map((activity) => (
+                  <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                    <input
+                      type="checkbox"
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                      checked={formData.selectedActivities.includes(activity.id)}
+                      onChange={() => toggleActivity(activity.id)}
+                    />
+                    <span>
+                      <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
+                      <span className="block text-slate-600">{activity.label}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {step === 3 && (
+            <div className="space-y-3">
+              <h2 className="text-2xl font-bold text-slate-800">Jag kan ställa upp till följande</h2>
+              <div className="space-y-2">
+                {standingRoleActivities.map((activity) => (
+                  <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
+                    <label className="flex items-start gap-3 text-sm text-slate-700">
                       <input
                         type="checkbox"
                         className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
                         checked={formData.selectedActivities.includes(activity.id)}
                         onChange={() => toggleActivity(activity.id)}
                       />
-                      <span>
-                        <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
-                        <span className="block text-slate-600">{activity.label}</span>
-                      </span>
+                      <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
                     </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="space-y-3">
-                <h3 className="text-lg font-bold text-slate-800">Jag kan ställa upp till följande</h3>
-                <div className="space-y-2">
-                  {standingRoleActivities.map((activity) => (
-                    <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
-                      <label className="flex items-start gap-3 text-sm text-slate-700">
-                        <input
-                          type="checkbox"
-                          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                          checked={formData.selectedActivities.includes(activity.id)}
-                          onChange={() => toggleActivity(activity.id)}
-                        />
-                        <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
-                      </label>
-                      {activity.id === 'own-suggestion' && formData.selectedActivities.includes('own-suggestion') && (
-                        <input
-                          type="text"
-                          value={formData.ownSuggestionText}
-                          onChange={(e) => updateField('ownSuggestionText', e.target.value)}
-                          className="input mt-2"
-                          placeholder="Beskriv ditt förslag"
-                        />
-                      )}
-                    </div>
-                  ))}
-                </div>
+                    {activity.id === 'own-suggestion' && formData.selectedActivities.includes('own-suggestion') && (
+                      <input
+                        type="text"
+                        value={formData.ownSuggestionText}
+                        onChange={(e) => updateField('ownSuggestionText', e.target.value)}
+                        className="input mt-2"
+                        placeholder="Beskriv ditt förslag"
+                      />
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}
 
-          {step === 2 && (
+          {step === 4 && (
             <div className="space-y-4">
               <h2 className="text-2xl font-bold text-slate-800">Uppgifter om mig som vårdnadshavare</h2>
               <div className="grid gap-4 md:grid-cols-2">
@@ -342,15 +376,19 @@ export default function PublicWizard() {
                 </div>
                 <div>
                   <label className="label" htmlFor="avdelning">Avdelning</label>
-                  <input id="avdelning" type="text" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input" />
+                  <select id="avdelning" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input">
+                    <option value="">Välj avdelning</option>
+                    {AVDELNINGAR.map((avdelning) => (
+                      <option key={avdelning} value={avdelning}>{avdelning}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
             </div>
           )}
 
-          {step === 3 && (
+          {step === 5 && (
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">Övrig information</h2>
               <div>
                 <label className="label" htmlFor="comments">Kommentar</label>
                 <textarea
@@ -361,12 +399,8 @@ export default function PublicWizard() {
                   placeholder="Skriv eventuella önskemål eller behov här..."
                 />
               </div>
-            </div>
-          )}
 
-          {step === 4 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">GDPR-samtycke</h2>
+              <h2 className="pt-2 text-2xl font-bold text-slate-800">GDPR-samtycke</h2>
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
                 <p>{config?.consentText}</p>
               </div>

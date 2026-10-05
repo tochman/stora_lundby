@@ -12,10 +12,21 @@ const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
 
 // Mutable so phase-2 admin screens (activities/admins CRUD) behave
 // sensibly when smoke-tested in dev mode without a real backend.
+// Mirrors Code.gs's DEFAULT_ACTIVITIES so local `npm run dev` demos reflect
+// the real shape: two markets a term, gift drop-offs as their own category.
 let mockActivities = [
+  { id: 'gift-skordemarknad', year: '2026', term: 'Höst', category: 'gift', label: 'Gåva av lotterivinst till skördemarknad (inlämning 24 september kl 18-20 på Scoutgården)', date: '2026-09-24', startTime: '18:00', endTime: '20:00', location: 'Scoutgården', capacity: null, active: true, sortOrder: 1 },
+  { id: 'prep-skordemarknad', year: '2026', term: 'Höst', category: 'prep', label: 'Förberedelse inför marknaden', date: '2026-09-24', startTime: '18:00', endTime: '20:00', location: 'Scoutgården', capacity: null, active: true, sortOrder: 2 },
   { id: 'shift1-skordemarknad', year: '2026', term: 'Höst', category: 'market-shift', label: 'Stå i marknadsstånd på skördemarknaden', date: '2026-09-27', startTime: '10:00', endTime: '13:00', location: 'Mjörnbotorget', capacity: null, active: true, sortOrder: 3 },
+  { id: 'shift2-skordemarknad', year: '2026', term: 'Höst', category: 'market-shift', label: 'Stå i marknadsstånd på skördemarknaden', date: '2026-09-27', startTime: '13:00', endTime: '16:00', location: 'Mjörnbotorget', capacity: null, active: true, sortOrder: 4 },
   { id: 'workday-ljungslatt', year: '2026', term: 'Höst', category: 'workday', label: 'Arbetsdag på Ljungslätt (utomhus och inomhus)', date: '2026-10-03', startTime: '10:00', endTime: '14:00', location: 'Ljungslätt', capacity: null, active: true, sortOrder: 5 },
+  { id: 'pyssel-julmarknad', year: '2026', term: 'Höst', category: 'baking', label: 'Pysseldag - vi bakar, pysslar och tillverkar vinster inför julmarknaden', date: '2026-11-28', startTime: '', endTime: '', location: 'Scoutgården', capacity: null, active: true, sortOrder: 6 },
+  { id: 'gift-julmarknad', year: '2026', term: 'Höst', category: 'gift', label: 'Gåva av lotterivinst till julmarknad (inlämning 3 december kl 18-20 på Scoutgården)', date: '2026-12-03', startTime: '18:00', endTime: '20:00', location: 'Scoutgården', capacity: null, active: true, sortOrder: 7 },
+  { id: 'prep-julmarknad', year: '2026', term: 'Höst', category: 'prep', label: 'Förberedelse inför marknaden', date: '2026-12-03', startTime: '18:00', endTime: '20:00', location: 'Scoutgården', capacity: null, active: true, sortOrder: 8 },
+  { id: 'shift1-julmarknad', year: '2026', term: 'Höst', category: 'market-shift', label: 'Stå i marknadsstånd på julmarknaden', date: '2026-12-05', startTime: '10:00', endTime: '13:00', location: 'Mjörnbotorget', capacity: null, active: true, sortOrder: 9 },
+  { id: 'shift2-julmarknad', year: '2026', term: 'Höst', category: 'market-shift', label: 'Stå i marknadsstånd på julmarknaden', date: '2026-12-05', startTime: '13:00', endTime: '16:00', location: 'Mjörnbotorget', capacity: null, active: true, sortOrder: 10 },
   { id: 'market-group', year: '', term: '', category: 'standing-role', label: 'Gå med i marknadsgruppen som samordnar marknader på Mjörnbotorget', date: '', startTime: '', endTime: '', location: '', capacity: null, active: true, sortOrder: 11 },
+  { id: 'board-work', year: '', term: '', category: 'standing-role', label: 'Styrelsearbete eller annat administrativt uppdrag', date: '', startTime: '', endTime: '', location: '', capacity: null, active: true, sortOrder: 12 },
   { id: 'own-suggestion', year: '', term: '', category: 'standing-role', label: 'Eget förslag', date: '', startTime: '', endTime: '', location: '', capacity: null, active: true, sortOrder: 13 }
 ];
 
