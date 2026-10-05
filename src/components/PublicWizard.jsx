@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
 import { AVDELNINGAR } from '../utils/constants';
+import LoadingOverlay from './LoadingOverlay';
 
 const steps = [1, 2, 3, 4, 5];
 
@@ -174,11 +175,7 @@ export default function PublicWizard() {
   };
 
   if (loadingActivities) {
-    return (
-      <PublicLayout>
-        <div className="mx-auto max-w-3xl text-center text-slate-600">Laddar formulär...</div>
-      </PublicLayout>
-    );
+    return <LoadingOverlay label="Laddar formulär..." />;
   }
 
   if (loadError) {

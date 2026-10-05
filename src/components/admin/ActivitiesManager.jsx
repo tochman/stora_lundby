@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
+import LoadingOverlay from '../LoadingOverlay';
 
 const CATEGORY_LABELS = {
   gift: 'Lotterigåva',
@@ -28,6 +29,7 @@ const emptyDraft = {
 function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
   const [draft, setDraft] = useState(activity);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const dirty = JSON.stringify(draft) !== JSON.stringify(activity);
 
   const update = (field, value) => setDraft((prev) => ({ ...prev, [field]: value }));
@@ -35,8 +37,12 @@ function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
   const save = async () => {
     try {
       setSaving(true);
-      await api.upsertActivity(draft, idToken);
-      onSaved();
+      const result = await api.upsertActivity(draft, idToken);
+      // Update the row in place rather than reloading the whole list -
+      // we already know exactly what changed, and a full-screen loading
+      // overlay for editing one field in one row is disruptive, especially
+      // with many activities and Apps Script's per-request latency.
+      onSaved({ ...draft, id: result.id || draft.id });
     } catch (err) {
       onError(err.message || 'Kunde inte spara aktiviteten.');
     } finally {
@@ -45,12 +51,14 @@ function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
   };
 
   const remove = async () => {
-    if (!window.confirm(`Ta bort "${draft.label}"?`)) return;
+    if (deleting || !window.confirm(`Ta bort "${draft.label}"?`)) return;
     try {
+      setDeleting(true);
       await api.deleteActivity(draft.id, idToken);
-      onDeleted();
+      onDeleted(draft.id);
     } catch (err) {
       onError(err.message || 'Kunde inte ta bort aktiviteten.');
+      setDeleting(false);
     }
   };
 
@@ -74,11 +82,11 @@ function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
         <input type="checkbox" checked={draft.active} onChange={(e) => update('active', e.target.checked)} />
       </td>
       <td className="whitespace-nowrap px-2 py-2">
-        <button type="button" className="btn btn-primary mr-2 px-2 py-1 text-xs" disabled={!dirty || saving} onClick={save}>
+        <button type="button" className="btn btn-primary mr-2 px-2 py-1 text-xs" disabled={!dirty || saving || deleting} onClick={save}>
           {saving ? 'Sparar...' : 'Spara'}
         </button>
-        <button type="button" className="text-xs font-semibold text-red-600 hover:underline" onClick={remove}>
-          Ta bort
+        <button type="button" className="text-xs font-semibold text-red-600 hover:underline disabled:opacity-50" disabled={saving || deleting} onClick={remove}>
+          {deleting ? 'Tar bort...' : 'Ta bort'}
         </button>
       </td>
     </tr>
@@ -94,6 +102,9 @@ export default function ActivitiesManager({ idToken }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [addingActivity, setAddingActivity] = useState(false);
+  const [copying, setCopying] = useState(false);
 
   const load = async () => {
     try {
@@ -119,18 +130,24 @@ export default function ActivitiesManager({ idToken }) {
   }, []);
 
   const saveConfig = async () => {
+    if (savingConfig) return;
     try {
+      setSavingConfig(true);
       await api.updateConfig(configDraft, idToken);
       setNotice('Inställningar sparade.');
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte spara inställningar.');
+    } finally {
+      setSavingConfig(false);
     }
   };
 
   const addActivity = async (event) => {
     event.preventDefault();
+    if (addingActivity) return;
     try {
+      setAddingActivity(true);
       await api.upsertActivity(
         { ...newActivity, year: newActivity.category === 'standing-role' ? '' : newActivity.year, term: newActivity.category === 'standing-role' ? '' : newActivity.term },
         idToken
@@ -139,21 +156,27 @@ export default function ActivitiesManager({ idToken }) {
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte lägga till aktiviteten.');
+    } finally {
+      setAddingActivity(false);
     }
   };
 
   const copyFromPreviousTerm = async (event) => {
     event.preventDefault();
+    if (copying) return;
     try {
+      setCopying(true);
       const result = await api.copyActivities(copyForm.fromYear, copyForm.fromTerm, copyForm.toYear, copyForm.toTerm, idToken);
       setNotice(`Kopierade ${result.copied} aktiviteter. Kom ihåg att sätta nya datum.`);
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte kopiera aktiviteter.');
+    } finally {
+      setCopying(false);
     }
   };
 
-  if (loading) return <div className="card">Laddar aktiviteter...</div>;
+  if (loading) return <LoadingOverlay label="Laddar aktiviteter..." />;
 
   return (
     <div className="space-y-6">
@@ -180,7 +203,9 @@ export default function ActivitiesManager({ idToken }) {
               <input className="input" type="date" value={configDraft.submissionDeadline || ''} onChange={(e) => setConfigDraft((p) => ({ ...p, submissionDeadline: e.target.value }))} />
             </div>
             <div className="flex items-end">
-              <button type="button" className="btn btn-primary w-full" onClick={saveConfig}>Spara</button>
+              <button type="button" className="btn btn-primary w-full" disabled={savingConfig} onClick={saveConfig}>
+                {savingConfig ? 'Sparar...' : 'Spara'}
+              </button>
             </div>
           </div>
         )}
@@ -201,7 +226,7 @@ export default function ActivitiesManager({ idToken }) {
             <option value="Höst">Höst</option>
             <option value="Vår">Vår</option>
           </select>
-          <button type="submit" className="btn btn-primary">Kopiera</button>
+          <button type="submit" className="btn btn-primary" disabled={copying}>{copying ? 'Kopierar...' : 'Kopiera'}</button>
         </form>
       </section>
 
@@ -229,8 +254,18 @@ export default function ActivitiesManager({ idToken }) {
                   key={activity.id}
                   activity={activity}
                   idToken={idToken}
-                  onSaved={() => { setNotice('Sparat.'); load(); }}
-                  onDeleted={() => { setNotice('Borttagen.'); load(); }}
+                  onSaved={(savedActivity) => {
+                    setNotice('Sparat.');
+                    setActivities((prev) =>
+                      prev
+                        .map((a) => (a.id === activity.id ? savedActivity : a))
+                        .sort((a, b) => a.sortOrder - b.sortOrder)
+                    );
+                  }}
+                  onDeleted={(deletedId) => {
+                    setNotice('Borttagen.');
+                    setActivities((prev) => prev.filter((a) => a.id !== deletedId));
+                  }}
                   onError={setError}
                 />
               ))}
@@ -262,7 +297,7 @@ export default function ActivitiesManager({ idToken }) {
               <input className="input" placeholder="Plats" value={newActivity.location} onChange={(e) => setNewActivity((p) => ({ ...p, location: e.target.value }))} />
             </>
           )}
-          <button type="submit" className="btn btn-primary">Lägg till</button>
+          <button type="submit" className="btn btn-primary" disabled={addingActivity}>{addingActivity ? 'Lägger till...' : 'Lägg till'}</button>
         </form>
       </section>
     </div>

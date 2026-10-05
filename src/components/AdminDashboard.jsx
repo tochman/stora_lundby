@@ -15,6 +15,7 @@ import AdminsManager from './admin/AdminsManager';
 import ManualEntryForm from './admin/ManualEntryForm';
 import DataRetention from './admin/DataRetention';
 import ActivityReport from './admin/ActivityReport';
+import LoadingOverlay from './LoadingOverlay';
 
 const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
 const views = [
@@ -126,6 +127,11 @@ export default function AdminDashboard() {
     return <SignInScreen error={error} />;
   }
 
+  // Derived live from `applications` (not the one-off summary fetch), so it
+  // stays correct after a local status patch in setStatus() without needing
+  // a full reload.
+  const liveNewCount = applications.filter((app) => String(app.status).toLowerCase() === 'ny').length;
+
   const filtered = applications.filter((app) => {
     if (filter.status !== 'all' && app.status !== filter.status) return false;
     if (filter.activity !== 'all' && !(app.selectedActivities || []).includes(filter.activity)) return false;
@@ -139,16 +145,21 @@ export default function AdminDashboard() {
   const setStatus = async (id, nextStatus) => {
     try {
       await api.updateApplicationStatus(id, nextStatus, idToken);
-      await loadDashboard(idToken);
+      // Patch locally instead of a full loadDashboard() - we already know
+      // exactly what changed, and reloading everything (plus the
+      // full-screen loading overlay that comes with it) for a one-field
+      // status change is disruptive and unnecessary round trips.
+      setApplications((prev) => prev.map((app) => (app.id === id ? { ...app, status: nextStatus } : app)));
     } catch (err) {
       setError(err.message || 'Kunde inte uppdatera status.');
     }
   };
 
   const saveNotes = async (id) => {
+    const notes = notesDraft[id] ?? '';
     try {
-      await api.updateApplicationNotes(id, notesDraft[id] ?? '', idToken);
-      await loadDashboard(idToken);
+      await api.updateApplicationNotes(id, notes, idToken);
+      setApplications((prev) => prev.map((app) => (app.id === id ? { ...app, internalNotes: notes } : app)));
     } catch (err) {
       setError(err.message || 'Kunde inte spara anteckning.');
     }
@@ -160,11 +171,7 @@ export default function AdminDashboard() {
   };
 
   if (loading) {
-    return (
-      <AdminLayout>
-        <div className="card">Laddar...</div>
-      </AdminLayout>
-    );
+    return <LoadingOverlay />;
   }
 
   return (
@@ -209,7 +216,7 @@ export default function AdminDashboard() {
             </div>
             <div className="card border-l-4 border-yellow-500 bg-yellow-50">
               <div className="text-sm text-slate-600">Nya</div>
-              <div className="mt-2 text-3xl font-bold text-yellow-500">{summary.newCount}</div>
+              <div className="mt-2 text-3xl font-bold text-yellow-500">{liveNewCount}</div>
             </div>
             <div className="card border-l-4 border-green-500 bg-green-50">
               <div className="text-sm text-slate-600">Bemannade pass</div>

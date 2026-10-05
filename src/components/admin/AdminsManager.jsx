@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
+import LoadingOverlay from '../LoadingOverlay';
 
 export default function AdminsManager({ idToken, currentEmail }) {
   const [admins, setAdmins] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [submitting, setSubmitting] = useState(false);
+  const [togglingEmail, setTogglingEmail] = useState(null);
 
   const load = async () => {
     try {
@@ -27,29 +30,36 @@ export default function AdminsManager({ idToken, currentEmail }) {
 
   const addAdmin = async (event) => {
     event.preventDefault();
-    if (!newEmail.trim()) return;
+    if (!newEmail.trim() || submitting) return;
     try {
+      setSubmitting(true);
       await api.addAdmin(newEmail.trim(), idToken);
       setNewEmail('');
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte lägga till admin.');
+    } finally {
+      setSubmitting(false);
     }
   };
 
   const toggleActive = async (email, active) => {
+    if (togglingEmail) return;
     if (email === currentEmail && !active) {
       if (!window.confirm('Du är på väg att ta bort din egen adminbehörighet. Fortsätta?')) return;
     }
     try {
+      setTogglingEmail(email);
       await api.setAdminActive(email, active, idToken);
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte uppdatera admin.');
+    } finally {
+      setTogglingEmail(null);
     }
   };
 
-  if (loading) return <div className="card">Laddar admins...</div>;
+  if (loading) return <LoadingOverlay label="Laddar admins..." />;
 
   return (
     <div className="space-y-6">
@@ -66,7 +76,9 @@ export default function AdminsManager({ idToken, currentEmail }) {
             onChange={(e) => setNewEmail(e.target.value)}
             required
           />
-          <button type="submit" className="btn btn-primary whitespace-nowrap">Lägg till</button>
+          <button type="submit" className="btn btn-primary whitespace-nowrap" disabled={submitting}>
+            {submitting ? 'Lägger till...' : 'Lägg till'}
+          </button>
         </form>
       </section>
 
@@ -96,10 +108,11 @@ export default function AdminsManager({ idToken, currentEmail }) {
                   <td className="px-2 py-2">
                     <button
                       type="button"
-                      className="text-xs font-semibold text-brand-600 hover:underline"
+                      className="text-xs font-semibold text-brand-600 hover:underline disabled:opacity-50"
+                      disabled={togglingEmail === admin.email}
                       onClick={() => toggleActive(admin.email, !isActive)}
                     >
-                      {isActive ? 'Inaktivera' : 'Aktivera'}
+                      {togglingEmail === admin.email ? '...' : isActive ? 'Inaktivera' : 'Aktivera'}
                     </button>
                   </td>
                 </tr>

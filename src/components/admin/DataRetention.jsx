@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
+import LoadingOverlay from '../LoadingOverlay';
 
 export default function DataRetention({ idToken }) {
   const [config, setConfig] = useState(null);
@@ -11,6 +12,7 @@ export default function DataRetention({ idToken }) {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [purging, setPurging] = useState(false);
+  const [savingRetention, setSavingRetention] = useState(false);
 
   const load = async () => {
     try {
@@ -38,12 +40,16 @@ export default function DataRetention({ idToken }) {
   }, []);
 
   const saveRetentionPeriod = async () => {
+    if (savingRetention) return;
     try {
+      setSavingRetention(true);
       await api.updateConfig({ retentionPeriodMonths: retentionDraft }, idToken);
       setNotice('Gallringsperiod sparad.');
       await load();
     } catch (err) {
       setError(err.message || 'Kunde inte spara gallringsperiod.');
+    } finally {
+      setSavingRetention(false);
     }
   };
 
@@ -75,7 +81,7 @@ export default function DataRetention({ idToken }) {
     }
   };
 
-  if (loading) return <div className="card">Laddar...</div>;
+  if (loading) return <LoadingOverlay />;
 
   return (
     <div className="space-y-6">
@@ -93,7 +99,9 @@ export default function DataRetention({ idToken }) {
             <label className="label">Månader</label>
             <input className="input w-32" type="number" min="1" value={retentionDraft} onChange={(e) => setRetentionDraft(e.target.value)} />
           </div>
-          <button type="button" className="btn btn-primary" onClick={saveRetentionPeriod}>Spara</button>
+          <button type="button" className="btn btn-primary" disabled={savingRetention} onClick={saveRetentionPeriod}>
+            {savingRetention ? 'Sparar...' : 'Spara'}
+          </button>
         </div>
       </section>
 

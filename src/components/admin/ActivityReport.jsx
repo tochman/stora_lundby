@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
+import LoadingOverlay from '../LoadingOverlay';
 
 const SWEDISH_MONTHS = [
   'januari', 'februari', 'mars', 'april', 'maj', 'juni',
@@ -79,7 +80,7 @@ export default function ActivityReport({ idToken }) {
 
   const generatedOn = new Date().toLocaleDateString('sv-SE');
 
-  if (loading) return <div className="card">Laddar...</div>;
+  if (loading) return <LoadingOverlay />;
 
   return (
     <div className="space-y-6">

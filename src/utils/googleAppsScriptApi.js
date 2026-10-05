@@ -9,6 +9,10 @@
 // content type (which forces a preflight) would fail cross-origin.
 
 const APPS_SCRIPT_URL = import.meta.env.VITE_APPS_SCRIPT_URL;
+// Apps Script's redirect-based content delivery can occasionally hang
+// rather than error outright - without a timeout, a stuck request leaves
+// the UI showing "Laddar..." forever with no feedback.
+const REQUEST_TIMEOUT_MS = 25000;
 
 // Mutable so phase-2 admin screens (activities/admins CRUD) behave
 // sensibly when smoke-tested in dev mode without a real backend.
@@ -200,11 +204,25 @@ async function callAppsScript(action, params = {}) {
     throw new Error('VITE_APPS_SCRIPT_URL är inte konfigurerad.');
   }
 
-  const response = await fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ action, ...params })
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let response;
+  try {
+    response = await fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action, ...params }),
+      signal: controller.signal
+    });
+  } catch (err) {
+    if (err.name === 'AbortError') {
+      throw new Error('Tidsgränsen överskreds vid anrop till backend. Försök igen.');
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   if (!response.ok) {
     throw new Error(`Nätverksfel (${response.status}) vid anrop till backend.`);
