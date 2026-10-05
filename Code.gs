@@ -195,6 +195,15 @@ function isAdmin(userEmail) {
 // ---------------------------------------------------------------------------
 
 function initializeProject() {
+  // Every request calls this, but the sheets only ever need creating once.
+  // Skip the repeated getSheetByName/getLastRow checks (each a Spreadsheet
+  // service round trip) for 6 hours after the last successful run - this
+  // is the single biggest latency cost on every call otherwise.
+  var cache = CacheService.getScriptCache();
+  if (cache.get('projectInitialized') === 'true') {
+    return;
+  }
+
   var ss = getSpreadsheet();
 
   Object.keys(SHEET_NAMES).forEach(function (key) {
@@ -254,6 +263,8 @@ function initializeProject() {
   if (purgeLogSheet.getLastRow() === 0) {
     purgeLogSheet.appendRow(['purgedAt', 'purgedBy', 'year', 'term', 'applicationsPurged', 'consentLogPurged']);
   }
+
+  cache.put('projectInitialized', 'true', 21600);
 }
 
 function getSpreadsheet() {
@@ -489,6 +500,20 @@ function copyActivities(fromYear, fromTerm, toYear, toTerm) {
 // Applications
 // ---------------------------------------------------------------------------
 
+// Writes a full Applications row (new or in-place edit). Forces the phone
+// column to plain-text format before writing: a digit-only string like
+// "0701234567" would otherwise be auto-converted to a number by Sheets,
+// silently dropping the leading zero - the same class of bug fixed for
+// Config's date values (see normalizeConfigValue).
+function writeApplicationRow(sheet, headers, rowValues, existingRowIndex) {
+  var targetRow = existingRowIndex === -1 ? sheet.getLastRow() + 1 : existingRowIndex + 1;
+  var phoneCol = headers.indexOf('guardianPhone');
+  if (phoneCol !== -1) {
+    sheet.getRange(targetRow, phoneCol + 1).setNumberFormat('@');
+  }
+  sheet.getRange(targetRow, 1, 1, rowValues.length).setValues([rowValues]);
+}
+
 function submitApplication(payload) {
   var data = payload || {};
   var requiredFields = ['year', 'term', 'guardianName', 'guardianPhone', 'guardianEmail', 'scoutName', 'avdelning'];
@@ -566,12 +591,7 @@ function submitApplication(payload) {
     consentVersion: consentVersion
   };
   var rowValues = headers.map(function (header) { return rowByHeader[header] !== undefined ? rowByHeader[header] : ''; });
-
-  if (existingRowIndex === -1) {
-    sheet.appendRow(rowValues);
-  } else {
-    sheet.getRange(existingRowIndex + 1, 1, 1, rowValues.length).setValues([rowValues]);
-  }
+  writeApplicationRow(sheet, headers, rowValues, existingRowIndex);
 
   getSheetByName(SHEET_NAMES.consentLog).appendRow([
     applicationId,
@@ -683,28 +703,32 @@ function createManualApplication(payload) {
   var now = new Date();
   var selectedActivities = Array.isArray(data.selectedActivities) ? data.selectedActivities : [];
 
-  var row = [
-    Utilities.getUuid(),
-    now,
-    now,
-    data.year || getConfigValue('currentYear', '2026'),
-    data.term || getConfigValue('currentTerm', 'Höst'),
-    data.guardianName || '',
-    data.guardianPhone || '',
-    data.guardianEmail || '',
-    data.scoutName || '',
-    data.avdelning || '',
-    JSON.stringify(selectedActivities),
-    data.ownSuggestionText || '',
-    data.comments || '',
-    data.status || 'Ny',
-    data.internalNotes || '',
-    'TRUE',
-    now,
-    getConfigValue('consentVersion', 'v1')
-  ];
+  var sheet = getSheetByName(SHEET_NAMES.applications);
+  var headers = sheet.getDataRange().getValues()[0];
 
-  getSheetByName(SHEET_NAMES.applications).appendRow(row);
+  var rowByHeader = {
+    id: Utilities.getUuid(),
+    createdAt: now,
+    updatedAt: now,
+    year: data.year || getConfigValue('currentYear', '2026'),
+    term: data.term || getConfigValue('currentTerm', 'Höst'),
+    guardianName: data.guardianName || '',
+    guardianPhone: data.guardianPhone || '',
+    guardianEmail: data.guardianEmail || '',
+    scoutName: data.scoutName || '',
+    avdelning: data.avdelning || '',
+    selectedActivities: JSON.stringify(selectedActivities),
+    ownSuggestionText: data.ownSuggestionText || '',
+    comments: data.comments || '',
+    status: data.status || 'Ny',
+    internalNotes: data.internalNotes || '',
+    consentGiven: 'TRUE',
+    consentAt: now,
+    consentVersion: getConfigValue('consentVersion', 'v1')
+  };
+  var rowValues = headers.map(function (header) { return rowByHeader[header] !== undefined ? rowByHeader[header] : ''; });
+
+  writeApplicationRow(sheet, headers, rowValues, -1);
   return { ok: true };
 }
 

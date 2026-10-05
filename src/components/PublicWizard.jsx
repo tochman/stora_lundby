@@ -57,10 +57,7 @@ export default function PublicWizard() {
     async function load() {
       try {
         setLoadingActivities(true);
-        // Sequential, not Promise.all: Apps Script Web Apps don't reliably
-        // handle several concurrent requests from the same client.
-        const activityList = await api.getActivities();
-        const publicConfig = await api.getConfig();
+        const [activityList, publicConfig] = await Promise.all([api.getActivities(), api.getConfig()]);
         if (cancelled) return;
         setActivities(activityList);
         setConfig(publicConfig);

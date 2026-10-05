@@ -30,10 +30,10 @@ export default function ActivityReport({ idToken }) {
     async function load() {
       try {
         setLoading(true);
-        // Sequential, not Promise.all: Apps Script Web Apps don't reliably
-        // handle several concurrent requests from the same client.
-        const activityList = await api.getActivitiesAdmin(idToken);
-        const apps = await api.getApplications(idToken);
+        const [activityList, apps] = await Promise.all([
+          api.getActivitiesAdmin(idToken),
+          api.getApplications(idToken)
+        ]);
         if (cancelled) return;
         setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
         setApplications(apps || []);

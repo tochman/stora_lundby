@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 
@@ -10,6 +10,8 @@ const CATEGORY_LABELS = {
   baking: 'Pysseldag / bak',
   'standing-role': 'Stående roll'
 };
+
+const LOCATIONS_DATALIST_ID = 'activity-locations';
 
 const emptyDraft = {
   id: '',
@@ -26,7 +28,7 @@ const emptyDraft = {
   sortOrder: 0
 };
 
-function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
+function ActivityRow({ activity, idToken, onSaved, onDeleted, onError, dragState, onDragStart, onDragOver, onDrop, onDragEnd }) {
   const [draft, setDraft] = useState(activity);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -63,7 +65,20 @@ function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
   };
 
   return (
-    <tr className="border-b border-slate-200 align-top">
+    <tr
+      className={`border-b border-slate-200 align-top ${dragState.overId === activity.id ? 'bg-brand-50' : ''}`}
+      onDragOver={(e) => { e.preventDefault(); onDragOver(activity.id); }}
+      onDrop={(e) => { e.preventDefault(); onDrop(activity.id); }}
+    >
+      <td
+        className="cursor-grab px-2 py-2 text-center text-slate-400 active:cursor-grabbing"
+        draggable
+        onDragStart={(e) => { e.dataTransfer.setData('text/plain', activity.id); onDragStart(activity.id); }}
+        onDragEnd={onDragEnd}
+        title="Dra för att ändra ordning"
+      >
+        ⠿
+      </td>
       <td className="px-2 py-2">
         <select className="input" value={draft.category} onChange={(e) => update('category', e.target.value)}>
           {Object.entries(CATEGORY_LABELS).map(([value, label]) => (
@@ -75,9 +90,10 @@ function ActivityRow({ activity, idToken, onSaved, onDeleted, onError }) {
       <td className="px-2 py-2"><input className="input" type="date" value={draft.date} onChange={(e) => update('date', e.target.value)} /></td>
       <td className="px-2 py-2"><input className="input" type="time" value={draft.startTime} onChange={(e) => update('startTime', e.target.value)} /></td>
       <td className="px-2 py-2"><input className="input" type="time" value={draft.endTime} onChange={(e) => update('endTime', e.target.value)} /></td>
-      <td className="px-2 py-2"><input className="input" value={draft.location} onChange={(e) => update('location', e.target.value)} /></td>
+      <td className="px-2 py-2">
+        <input className="input" list={LOCATIONS_DATALIST_ID} value={draft.location} onChange={(e) => update('location', e.target.value)} />
+      </td>
       <td className="px-2 py-2"><input className="input w-20" type="number" min="0" value={draft.capacity ?? ''} onChange={(e) => update('capacity', e.target.value === '' ? '' : Number(e.target.value))} /></td>
-      <td className="px-2 py-2"><input className="input w-16" type="number" value={draft.sortOrder} onChange={(e) => update('sortOrder', Number(e.target.value))} /></td>
       <td className="px-2 py-2 text-center">
         <input type="checkbox" checked={draft.active} onChange={(e) => update('active', e.target.checked)} />
       </td>
@@ -105,14 +121,15 @@ export default function ActivitiesManager({ idToken }) {
   const [savingConfig, setSavingConfig] = useState(false);
   const [addingActivity, setAddingActivity] = useState(false);
   const [copying, setCopying] = useState(false);
+  const [dragState, setDragState] = useState({ draggedId: null, overId: null });
 
   const load = async () => {
     try {
       setLoading(true);
-      // Sequential, not Promise.all: Apps Script Web Apps don't reliably
-      // handle several concurrent requests from the same client.
-      const activityList = await api.getActivitiesAdmin(idToken);
-      const publicConfig = await api.getConfig();
+      const [activityList, publicConfig] = await Promise.all([
+        api.getActivitiesAdmin(idToken),
+        api.getConfig()
+      ]);
       setActivities(activityList.sort((a, b) => a.sortOrder - b.sortOrder));
       setConfig(publicConfig);
       setConfigDraft(publicConfig);
@@ -128,6 +145,11 @@ export default function ActivitiesManager({ idToken }) {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const locationOptions = useMemo(
+    () => [...new Set(activities.map((a) => a.location).filter(Boolean))].sort(),
+    [activities]
+  );
 
   const saveConfig = async () => {
     if (savingConfig) return;
@@ -148,8 +170,14 @@ export default function ActivitiesManager({ idToken }) {
     if (addingActivity) return;
     try {
       setAddingActivity(true);
+      const maxSortOrder = activities.reduce((max, a) => Math.max(max, a.sortOrder), 0);
       await api.upsertActivity(
-        { ...newActivity, year: newActivity.category === 'standing-role' ? '' : newActivity.year, term: newActivity.category === 'standing-role' ? '' : newActivity.term },
+        {
+          ...newActivity,
+          year: newActivity.category === 'standing-role' ? '' : newActivity.year,
+          term: newActivity.category === 'standing-role' ? '' : newActivity.term,
+          sortOrder: maxSortOrder + 1
+        },
         idToken
       );
       setNewActivity(emptyDraft);
@@ -176,12 +204,58 @@ export default function ActivitiesManager({ idToken }) {
     }
   };
 
+  // Reordering only ever needs to persist the ONE moved activity: its new
+  // sortOrder is the midpoint between its new neighbors (fractional - that's
+  // fine, we only ever compare these numerically). That keeps a drag-drop
+  // to a single backend write instead of renumbering and saving every row.
+  const handleDrop = async (targetId) => {
+    const draggedId = dragState.draggedId;
+    setDragState({ draggedId: null, overId: null });
+    if (!draggedId || draggedId === targetId) return;
+
+    const sorted = [...activities].sort((a, b) => a.sortOrder - b.sortOrder);
+    const dragged = sorted.find((a) => a.id === draggedId);
+    const without = sorted.filter((a) => a.id !== draggedId);
+    const targetIndex = without.findIndex((a) => a.id === targetId);
+    if (!dragged || targetIndex === -1) return;
+
+    const prevItem = without[targetIndex - 1];
+    const nextItem = without[targetIndex];
+    let newSortOrder;
+    if (prevItem && nextItem) {
+      newSortOrder = (prevItem.sortOrder + nextItem.sortOrder) / 2;
+    } else if (nextItem) {
+      newSortOrder = nextItem.sortOrder - 1;
+    } else if (prevItem) {
+      newSortOrder = prevItem.sortOrder + 1;
+    } else {
+      newSortOrder = 0;
+    }
+
+    const updated = { ...dragged, sortOrder: newSortOrder };
+    const previousActivities = activities;
+    setActivities((prev) => prev.map((a) => (a.id === draggedId ? updated : a)).sort((a, b) => a.sortOrder - b.sortOrder));
+
+    try {
+      await api.upsertActivity(updated, idToken);
+    } catch (err) {
+      setError(err.message || 'Kunde inte spara ny ordning.');
+      setActivities(previousActivities);
+    }
+  };
+
   if (loading) return <LoadingOverlay label="Laddar aktiviteter..." />;
 
   return (
     <div className="space-y-6">
       {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
       {notice && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">{notice}</div>}
+
+      <datalist id={LOCATIONS_DATALIST_ID}>
+        {locationOptions.map((location) => (
+          <option key={location} value={location} />
+        ))}
+      </datalist>
 
       <section className="card">
         <h2 className="mb-4 text-xl font-bold text-slate-800">Termin och deadline</h2>
@@ -232,10 +306,12 @@ export default function ActivitiesManager({ idToken }) {
 
       <section className="card">
         <h2 className="mb-4 text-xl font-bold text-slate-800">Aktiviteter</h2>
+        <p className="mb-4 text-sm text-slate-500">Dra i <span aria-hidden="true">⠿</span> för att ändra ordningen de visas i på formuläret.</p>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
             <thead className="border-b border-slate-200">
               <tr>
+                <th className="px-2 py-2" />
                 <th className="px-2 py-2">Kategori</th>
                 <th className="px-2 py-2">Rubrik</th>
                 <th className="px-2 py-2">Datum</th>
@@ -243,7 +319,6 @@ export default function ActivitiesManager({ idToken }) {
                 <th className="px-2 py-2">Slut</th>
                 <th className="px-2 py-2">Plats</th>
                 <th className="px-2 py-2">Platser</th>
-                <th className="px-2 py-2">Ordning</th>
                 <th className="px-2 py-2">Aktiv</th>
                 <th className="px-2 py-2" />
               </tr>
@@ -254,6 +329,11 @@ export default function ActivitiesManager({ idToken }) {
                   key={activity.id}
                   activity={activity}
                   idToken={idToken}
+                  dragState={dragState}
+                  onDragStart={(id) => setDragState({ draggedId: id, overId: null })}
+                  onDragOver={(id) => setDragState((s) => ({ ...s, overId: id }))}
+                  onDrop={handleDrop}
+                  onDragEnd={() => setDragState({ draggedId: null, overId: null })}
                   onSaved={(savedActivity) => {
                     setNotice('Sparat.');
                     setActivities((prev) =>
@@ -294,7 +374,7 @@ export default function ActivitiesManager({ idToken }) {
               <input className="input" type="date" value={newActivity.date} onChange={(e) => setNewActivity((p) => ({ ...p, date: e.target.value }))} />
               <input className="input" type="time" value={newActivity.startTime} onChange={(e) => setNewActivity((p) => ({ ...p, startTime: e.target.value }))} />
               <input className="input" type="time" value={newActivity.endTime} onChange={(e) => setNewActivity((p) => ({ ...p, endTime: e.target.value }))} />
-              <input className="input" placeholder="Plats" value={newActivity.location} onChange={(e) => setNewActivity((p) => ({ ...p, location: e.target.value }))} />
+              <input className="input" list={LOCATIONS_DATALIST_ID} placeholder="Plats" value={newActivity.location} onChange={(e) => setNewActivity((p) => ({ ...p, location: e.target.value }))} />
             </>
           )}
           <button type="submit" className="btn btn-primary" disabled={addingActivity}>{addingActivity ? 'Lägger till...' : 'Lägg till'}</button>

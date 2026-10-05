@@ -17,11 +17,11 @@ export default function DataRetention({ idToken }) {
   const load = async () => {
     try {
       setLoading(true);
-      // Sequential, not Promise.all: Apps Script Web Apps don't reliably
-      // handle several concurrent requests from the same client.
-      const publicConfig = await api.getConfig();
-      const apps = await api.getApplications(idToken);
-      const log = await api.getPurgeLog(idToken);
+      const [publicConfig, apps, log] = await Promise.all([
+        api.getConfig(),
+        api.getApplications(idToken),
+        api.getPurgeLog(idToken)
+      ]);
       setConfig(publicConfig);
       setRetentionDraft(publicConfig.retentionPeriodMonths || '24');
       setApplications(apps || []);

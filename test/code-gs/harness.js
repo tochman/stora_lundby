@@ -10,14 +10,30 @@ import { fileURLToPath } from 'node:url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const CODE_GS_PATH = path.resolve(__dirname, '../../Code.gs');
 
+// Mirrors real Google Sheets: a digit-only string written to a cell that
+// hasn't been explicitly formatted as plain text ('@') gets silently
+// auto-converted to a Number, dropping any leading zero. Without
+// simulating this, the harness couldn't actually catch the phone-number
+// bug (or prove the fix works) - a "fake" sheet that just stores whatever
+// you hand it would make that test pass regardless of whether the real
+// fix is correct.
+function coerceForSheetCell(value, isTextFormatted) {
+  if (isTextFormatted) return value;
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number(value);
+  }
+  return value;
+}
+
 class FakeSheet {
   constructor(name) {
     this.name = name;
     this.rows = [];
+    this.formats = {};
   }
 
   appendRow(row) {
-    this.rows.push(row.slice());
+    this.rows.push(row.map((value) => coerceForSheetCell(value, false)));
   }
 
   getDataRange() {
@@ -31,14 +47,22 @@ class FakeSheet {
 
   getRange(row, col, numRows = 1, numCols = 1) {
     const sheet = this;
+    const formatKey = (r, c) => `${r},${c}`;
     return {
+      setNumberFormat(format) {
+        sheet.formats[formatKey(row, col)] = format;
+      },
       setValue(value) {
-        sheet.rows[row - 1][col - 1] = value;
+        if (!sheet.rows[row - 1]) sheet.rows[row - 1] = [];
+        const isText = sheet.formats[formatKey(row, col)] === '@';
+        sheet.rows[row - 1][col - 1] = coerceForSheetCell(value, isText);
       },
       setValues(values) {
         for (let i = 0; i < values.length; i += 1) {
+          if (!sheet.rows[row - 1 + i]) sheet.rows[row - 1 + i] = [];
           for (let j = 0; j < values[i].length; j += 1) {
-            sheet.rows[row - 1 + i][col - 1 + j] = values[i][j];
+            const isText = sheet.formats[formatKey(row, col + j)] === '@';
+            sheet.rows[row - 1 + i][col - 1 + j] = coerceForSheetCell(values[i][j], isText);
           }
         }
       }
@@ -116,7 +140,16 @@ export function createCodeGsContext() {
         getContentText: () => JSON.stringify(tokenInfo)
       })
     },
-    Logger: { log: () => {} }
+    Logger: { log: () => {} },
+    CacheService: {
+      getScriptCache: (() => {
+        const store = new Map();
+        return () => ({
+          get: (key) => (store.has(key) ? store.get(key) : null),
+          put: (key, value) => store.set(key, value)
+        });
+      })()
+    }
   };
 
   vm.createContext(context);

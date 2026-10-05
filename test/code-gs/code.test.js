@@ -131,6 +131,25 @@ describe('submitApplication writes', () => {
     expect(consentRows[0][0]).toBe(row.id);
   });
 
+  it('preserves a leading zero in a digit-only phone number', () => {
+    // No dashes/spaces - exactly the shape Sheets would otherwise
+    // auto-convert to a Number, dropping the leading zero.
+    ctx.context.submitApplication({ ...validPayload(), guardianPhone: '0701234567' });
+
+    const headers = applicationsHeaders();
+    const row = Object.fromEntries(headers.map((header, i) => [header, applicationRows()[0][i]]));
+    expect(row.guardianPhone).toBe('0701234567');
+  });
+
+  it('preserves a leading zero in a digit-only phone number across an edit', () => {
+    ctx.context.submitApplication({ ...validPayload(), guardianPhone: '0701234567' });
+    ctx.context.submitApplication({ ...validPayload(), guardianPhone: '0709876543' });
+
+    const headers = applicationsHeaders();
+    const row = Object.fromEntries(headers.map((header, i) => [header, applicationRows()[0][i]]));
+    expect(row.guardianPhone).toBe('0709876543');
+  });
+
   it('treats a second submission with the same email/year/term as an edit, not a duplicate', () => {
     ctx.context.submitApplication(validPayload());
     ctx.context.submitApplication({ ...validPayload(), scoutName: 'Lina (uppdaterad)', selectedActivities: [] });
@@ -165,6 +184,25 @@ describe('submitApplication writes', () => {
     expect(ctx.sentEmails).toHaveLength(1);
     expect(ctx.sentEmails[0].to).toBe('anna@example.com');
     expect(ctx.sentEmails[0].body).toContain('marknadsstånd');
+  });
+});
+
+describe('createManualApplication', () => {
+  it('writes a row keyed by header, preserving a leading zero in the phone number', () => {
+    ctx.context.createManualApplication({
+      guardianName: 'Bea Berg',
+      guardianPhone: '0731112233',
+      guardianEmail: 'bea@example.com',
+      scoutName: 'Bo',
+      avdelning: 'Utmanare',
+      selectedActivities: []
+    });
+
+    const headers = applicationsHeaders();
+    const row = Object.fromEntries(headers.map((header, i) => [header, applicationRows()[0][i]]));
+    expect(row.guardianName).toBe('Bea Berg');
+    expect(row.guardianPhone).toBe('0731112233');
+    expect(row.status).toBe('Ny');
   });
 });
 

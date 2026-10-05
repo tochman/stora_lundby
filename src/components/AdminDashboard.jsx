@@ -94,11 +94,11 @@ export default function AdminDashboard() {
   const loadDashboard = async (token) => {
     try {
       setLoading(true);
-      // Sequential, not Promise.all: Apps Script Web Apps don't reliably
-      // handle several concurrent requests from the same client.
-      const apps = await api.getApplications(token);
-      const summaryData = await api.getAdminSummary(token);
-      const activityList = await api.getActivities();
+      const [apps, summaryData, activityList] = await Promise.all([
+        api.getApplications(token),
+        api.getAdminSummary(token),
+        api.getActivities()
+      ]);
       setApplications(apps || []);
       setSummary(summaryData);
       setActivities(activityList || []);
