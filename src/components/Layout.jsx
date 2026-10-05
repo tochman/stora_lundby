@@ -18,8 +18,8 @@ export function PublicLayout({ children }) {
 
 export function AdminLayout({ children }) {
   return (
-    <div className="min-h-screen bg-slate-100">
-      <header className="border-b border-slate-200 bg-white">
+    <div className="min-h-screen bg-slate-100 print:bg-white">
+      <header className="border-b border-slate-200 bg-white print:hidden">
         <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-4 sm:px-6 lg:px-8">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-brand-500">Admin</p>
@@ -27,7 +27,7 @@ export function AdminLayout({ children }) {
           </div>
         </div>
       </header>
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">{children}</main>
+      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 print:p-0">{children}</main>
     </div>
   );
 }

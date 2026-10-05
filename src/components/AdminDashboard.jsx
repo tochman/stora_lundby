@@ -14,13 +14,15 @@ import ActivitiesManager from './admin/ActivitiesManager';
 import AdminsManager from './admin/AdminsManager';
 import ManualEntryForm from './admin/ManualEntryForm';
 import DataRetention from './admin/DataRetention';
+import ActivityReport from './admin/ActivityReport';
 
 const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
 const views = [
   { id: 'applications', label: 'Anmälningar' },
   { id: 'activities', label: 'Aktiviteter' },
   { id: 'admins', label: 'Admins' },
-  { id: 'retention', label: 'Dataskydd' }
+  { id: 'retention', label: 'Dataskydd' },
+  { id: 'reports', label: 'Rapporter' }
 ];
 
 function formatTimestamp(value) {
@@ -167,14 +169,14 @@ export default function AdminDashboard() {
   return (
     <AdminLayout>
       <div className="space-y-6">
-        <div className="flex items-center justify-between text-sm text-slate-600">
+        <div className="flex items-center justify-between text-sm text-slate-600 print:hidden">
           <span>Inloggad som {profile?.email}</span>
           <button type="button" className="font-semibold text-brand-600 hover:underline" onClick={handleSignOut}>
             Logga ut
           </button>
         </div>
 
-        <nav className="flex gap-2 border-b border-slate-200">
+        <nav className="flex gap-2 border-b border-slate-200 print:hidden">
           {views.map((v) => (
             <button
               key={v.id}
@@ -196,6 +198,7 @@ export default function AdminDashboard() {
         {view === 'activities' && <ActivitiesManager idToken={idToken} />}
         {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}
         {view === 'retention' && <DataRetention idToken={idToken} />}
+        {view === 'reports' && <ActivityReport idToken={idToken} />}
 
         {view === 'applications' && summary && (
           <section className="grid gap-4 md:grid-cols-4">
