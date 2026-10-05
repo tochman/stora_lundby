@@ -9,3 +9,6 @@ build/
 .vscode/
 .idea/
 .env
+
+# Local Netlify folder
+.netlify

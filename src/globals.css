@@ -2,6 +2,15 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Stora Lundby Scoutkår's brand typeface, used by Scouterna member troops. */
+@font-face {
+  font-family: 'ScouternaRoundedPro';
+  src: url('/fonts/ScouternaRoundedPro.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
 :root {
   color: #1f2937;
   background: #f8fafc;
