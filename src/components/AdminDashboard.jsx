@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import api from '../utils/googleAppsScriptApi';
 import {
   decodeJwt,
@@ -22,6 +22,13 @@ const views = [
   { id: 'admins', label: 'Admins' },
   { id: 'retention', label: 'Dataskydd' }
 ];
+
+function formatTimestamp(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+}
 
 function isAuthError(message) {
   if (!message) return false;
@@ -75,6 +82,7 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notesDraft, setNotesDraft] = useState({});
+  const [expandedId, setExpandedId] = useState(null);
   const [view, setView] = useState('applications');
   const [showManualEntry, setShowManualEntry] = useState(false);
 
@@ -283,9 +291,17 @@ export default function AdminDashboard() {
                   </tr>
                 ) : (
                   filtered.map((app) => (
-                    <tr key={app.id} className="border-b border-slate-200 align-top">
+                    <Fragment key={app.id}>
+                    <tr className="border-b border-slate-200 align-top">
                       <td className="px-3 py-3 text-sm text-slate-800">
-                        <div className="font-medium">{app.guardianName}</div>
+                        <button
+                          type="button"
+                          className="mb-1 flex items-center gap-1 text-left font-medium hover:text-brand-600"
+                          onClick={() => setExpandedId((current) => (current === app.id ? null : app.id))}
+                        >
+                          <span className="text-xs text-slate-400">{expandedId === app.id ? '▾' : '▸'}</span>
+                          {app.guardianName}
+                        </button>
                         <div className="text-slate-500">{app.guardianEmail}</div>
                         <div className="text-slate-500">{app.guardianPhone}</div>
                       </td>
@@ -334,6 +350,24 @@ export default function AdminDashboard() {
                         />
                       </td>
                     </tr>
+                    {expandedId === app.id && (
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        <td colSpan={6} className="px-3 py-3 text-sm text-slate-700">
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div>
+                              <span className="font-semibold text-slate-600">Kommentar från vårdnadshavare:</span>
+                              <p className="mt-1 text-slate-600">{app.comments || '(ingen kommentar)'}</p>
+                            </div>
+                            <div className="text-slate-600">
+                              <div><span className="font-semibold">Anmäld:</span> {formatTimestamp(app.createdAt)}</div>
+                              <div><span className="font-semibold">Senast ändrad:</span> {formatTimestamp(app.updatedAt)}</div>
+                              <div><span className="font-semibold">Samtycke lämnat:</span> {formatTimestamp(app.consentAt)} (version {app.consentVersion})</div>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </Fragment>
                   ))
                 )}
               </tbody>
