@@ -61,7 +61,10 @@ const mockConsentLog = [
 const mockConfig = {
   currentYear: '2026',
   currentTerm: 'Höst',
-  submissionDeadline: '2026-09-17',
+  // Deliberately far out so local `npm run dev` demos show the live form
+  // instead of the "deadline passed" screen; the real deadline always
+  // comes from the Config sheet in production.
+  submissionDeadline: '2099-12-31',
   consentVersion: 'v1',
   consentText: 'Jag godkänner att Stora Lundby sparar mina uppgifter för att hantera anmälan och kontakta mig i samband med verksamheten.'
 };
@@ -74,8 +77,16 @@ async function mockAction(action, params) {
       return mockActivities;
     case 'getConfig':
       return mockConfig;
-    case 'submitApplication':
-      return { ok: true, id: 'demo-mock', message: 'Demoläge: anmälan har sparats (inte skickad till Sheets).' };
+    case 'submitApplication': {
+      const payload = params.payload || {};
+      const selectedIds = payload.selectedActivities || [];
+      return {
+        ok: true,
+        id: 'demo-mock',
+        message: 'Demoläge: anmälan har sparats (inte skickad till Sheets).',
+        selectedActivities: mockActivities.filter((a) => selectedIds.includes(a.id))
+      };
+    }
     case 'getApplications':
       return mockApplications;
     case 'getAdminSummary':

@@ -43,7 +43,7 @@ export default function PublicWizard() {
   const [loadingActivities, setLoadingActivities] = useState(true);
   const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
+  const [submitted, setSubmitted] = useState(null);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -112,7 +112,6 @@ export default function PublicWizard() {
   const handleSubmit = async (event) => {
     event.preventDefault();
     setError('');
-    setSuccess('');
 
     if (!formData.guardianName || !formData.guardianPhone || !formData.guardianEmail) {
       setError('Namn, telefon och e-post är obligatoriska.');
@@ -142,7 +141,15 @@ export default function PublicWizard() {
         term: config?.currentTerm,
         ...formData
       });
-      setSuccess(result.message || 'Din anmälan har mottagits.');
+      setSubmitted({
+        message: result.message || 'Din anmälan har mottagits.',
+        guardianName: formData.guardianName,
+        guardianEmail: formData.guardianEmail,
+        scoutName: formData.scoutName,
+        avdelning: formData.avdelning,
+        ownSuggestionText: formData.ownSuggestionText,
+        selectedActivities: result.selectedActivities || []
+      });
       setFormData(emptyForm);
       setStep(1);
     } catch (err) {
@@ -164,6 +171,54 @@ export default function PublicWizard() {
     return (
       <PublicLayout>
         <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</div>
+      </PublicLayout>
+    );
+  }
+
+  if (submitted) {
+    return (
+      <PublicLayout>
+        <div className="mx-auto max-w-2xl text-center">
+          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl text-green-600">
+            ✓
+          </div>
+          <h2 className="text-2xl font-bold text-slate-900">Tack, {submitted.guardianName}!</h2>
+          <p className="mt-2 text-slate-600">{submitted.message}</p>
+
+          <div className="card mt-6 text-left">
+            <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
+              {submitted.scoutName} · {submitted.avdelning}
+            </p>
+
+            {submitted.selectedActivities.length === 0 ? (
+              <p className="mt-3 text-slate-600">Du valde inga aktiviteter den här gången.</p>
+            ) : (
+              <ul className="mt-3 space-y-2">
+                {submitted.selectedActivities.map((activity) => (
+                  <li key={activity.id} className="rounded-lg border border-slate-200 p-3 text-sm">
+                    <span className="block font-medium text-slate-800">{activity.label}</span>
+                    {formatActivityWhen(activity) && (
+                      <span className="block text-slate-500">{formatActivityWhen(activity)}</span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            )}
+
+            {submitted.ownSuggestionText && (
+              <p className="mt-3 text-sm italic text-slate-600">Eget förslag: {submitted.ownSuggestionText}</p>
+            )}
+
+            <p className="mt-4 text-sm text-slate-500">
+              En bekräftelse har skickats till {submitted.guardianEmail}. Vill du ändra något? Fyll i formuläret
+              igen med samma e-postadress så uppdateras din anmälan istället för att skapa en ny.
+            </p>
+          </div>
+
+          <button type="button" className="btn btn-primary mt-6" onClick={() => setSubmitted(null)}>
+            Gör en ny anmälan
+          </button>
+        </div>
       </PublicLayout>
     );
   }
@@ -328,7 +383,6 @@ export default function PublicWizard() {
           )}
 
           {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
-          {success && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">{success}</div>}
 
           <div className="flex justify-between gap-4 pt-4">
             <button type="button" className="btn btn-secondary" disabled={step === 1} onClick={previousStep}>
