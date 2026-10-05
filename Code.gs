@@ -85,6 +85,9 @@ function handleAction(action, params) {
     case 'updateApplicationStatus':
       requireAdmin(params);
       return updateApplicationStatus(params.id, params.status);
+    case 'updateApplicationNotes':
+      requireAdmin(params);
+      return updateApplicationNotes(params.id, params.internalNotes);
     case 'createManualApplication':
       requireAdmin(params);
       return createManualApplication(params.payload || params);
@@ -185,7 +188,7 @@ function initializeProject() {
       'guardianName', 'guardianPhone', 'guardianEmail',
       'scoutName', 'avdelning',
       'selectedActivities', 'ownSuggestionText', 'comments',
-      'status', 'consentGiven', 'consentAt', 'consentVersion'
+      'status', 'internalNotes', 'consentGiven', 'consentAt', 'consentVersion'
     ]);
   }
 
@@ -400,6 +403,7 @@ function submitApplication(payload) {
     data.ownSuggestionText || '',
     data.comments || '',
     'Ny',
+    '',
     'TRUE',
     now,
     consentVersion
@@ -448,16 +452,28 @@ function getApplications() {
 }
 
 function updateApplicationStatus(id, status) {
+  return setApplicationField(id, 'status', status);
+}
+
+function updateApplicationNotes(id, internalNotes) {
+  return setApplicationField(id, 'internalNotes', internalNotes || '');
+}
+
+function setApplicationField(id, fieldName, value) {
   var sheet = getSheetByName(SHEET_NAMES.applications);
   var values = sheet.getDataRange().getValues();
   var headers = values[0];
   var idCol = headers.indexOf('id');
-  var statusCol = headers.indexOf('status');
+  var fieldCol = headers.indexOf(fieldName);
   var updatedAtCol = headers.indexOf('updatedAt');
+
+  if (fieldCol === -1) {
+    throw new Error('Okänt fält: ' + fieldName);
+  }
 
   for (var i = 1; i < values.length; i += 1) {
     if (String(values[i][idCol]) === String(id)) {
-      sheet.getRange(i + 1, statusCol + 1).setValue(status);
+      sheet.getRange(i + 1, fieldCol + 1).setValue(value);
       if (updatedAtCol !== -1) {
         sheet.getRange(i + 1, updatedAtCol + 1).setValue(new Date());
       }
@@ -487,6 +503,7 @@ function createManualApplication(payload) {
     data.ownSuggestionText || '',
     data.comments || '',
     data.status || 'Ny',
+    data.internalNotes || '',
     'TRUE',
     now,
     getConfigValue('consentVersion', 'v1')

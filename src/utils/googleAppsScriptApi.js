@@ -33,6 +33,7 @@ const mockApplications = [
     ownSuggestionText: '',
     comments: 'Hjälper gärna till igen.',
     status: 'Ny',
+    internalNotes: '',
     consentGiven: 'TRUE',
     consentAt: new Date().toISOString(),
     consentVersion: 'v1'
@@ -72,6 +73,7 @@ async function mockAction(action, params) {
     case 'getAdminSummary':
       return { total: mockApplications.length, newCount: 1, attendanceCount: 1, giftCount: 0, standingRoleCount: 0 };
     case 'updateApplicationStatus':
+    case 'updateApplicationNotes':
       return { ok: true };
     case 'createManualApplication':
       return { ok: true };
@@ -121,6 +123,7 @@ export const api = {
   getApplications: (idToken) => callAppsScript('getApplications', { idToken }),
   getAdminSummary: (idToken) => callAppsScript('getAdminSummary', { idToken }),
   updateApplicationStatus: (id, status, idToken) => callAppsScript('updateApplicationStatus', { id, status, idToken }),
+  updateApplicationNotes: (id, internalNotes, idToken) => callAppsScript('updateApplicationNotes', { id, internalNotes, idToken }),
   createManualApplication: (payload, idToken) => callAppsScript('createManualApplication', { payload, idToken }),
   getConsentLog: (idToken) => callAppsScript('getConsentLog', { idToken }),
   getAdmins: (idToken) => callAppsScript('getAdmins', { idToken }),
