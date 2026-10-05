@@ -1,183 +1,91 @@
 # Stora Lundby - Deployment Guide
 
-## 🌐 Netlify Deployment
+See `README.md` for the full local-setup walkthrough. This doc covers production deployment and
+troubleshooting.
 
-### Automatisk deployment från GitHub
+## 1. Deploy the backend (Google Apps Script)
 
-1. **Koppla GitHub-repot till Netlify**
-   ```
-   https://app.netlify.com/start
-   ```
+Follow "Sätta upp backend" in `README.md` to create the Apps Script project, point it at a spreadsheet,
+create the `GOOGLE_CLIENT_ID` OAuth client, and publish the Web App deployment. Keep the `/exec` URL
+handy for the next step.
 
-2. **Konfigurera build-inställningar**
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-   - Node version: 18 eller senare (rekommenderat)
+Every time you change `Code.gs`, you need to create a **new deployment version** (Distribuera → Hantera
+distributioner → redigera → ny version) - editing the script alone does not update the live `/exec` URL.
 
-3. **Lagra miljövariabler** (om du använder custom API-endpoint)
-   - Gå till Site settings → Build & deploy → Environment
-   - Lägg till `VITE_APPS_SCRIPT_URL` om nödvändigt
+## 2. Deploy the client (Netlify)
 
-4. **Deploy**
-   - Netlify bygger automatiskt vid varje push till `main`/`master`
-   - Du får en unik URL efter deployment
+### Via GitHub (recommended)
 
-### Manual deployment via CLI
+1. Push the repo to GitHub.
+2. In [app.netlify.com](https://app.netlify.com): "Add new site" → "Import an existing project" → pick
+   the repo. `netlify.toml` already declares the build command (`npm run build`) and publish directory
+   (`dist`), so the defaults Netlify suggests should match.
+3. Under Site settings → Environment variables, add:
+   - `VITE_APPS_SCRIPT_URL` - the Apps Script `/exec` URL from step 1.
+   - `VITE_GOOGLE_CLIENT_ID` - the OAuth client ID from step 1.
+4. Trigger a deploy. Netlify rebuilds automatically on every push to `main` afterwards.
+
+### Via CLI
 
 ```bash
-# Installera Netlify CLI
 npm install -g netlify-cli
-
-# Logga in
 netlify login
-
-# Bygga lokalt
-npm run build
-
-# Deploya
 netlify deploy --prod
 ```
 
-## 🔗 Koppla Netlify till Google Apps Script
+(Set the same two environment variables in the Netlify site settings first - the CLI doesn't read your
+local `.env`.)
 
-### Steg 1: Publicera Google Apps Script web app
+## 3. Finish the OAuth client setup
 
-1. Öppna ditt Apps Script-projekt på `script.google.com`
-2. Klicka "Distribuera" → "Ny distribution"
-3. Välj typ: **Web app**
-4. Konfiguration:
-   - "Kör som": Din Google-konto
-   - "Vem som helst som har länken"
-5. Klicka "Distribuera"
-6. **Kopiera web app-URL:en** - den ser ut så här:
-   ```
-   https://script.google.com/macros/d/{SCRIPT_ID}/usercontent
-   ```
+Google Identity Services checks the page's origin against the client ID's "Authorized JavaScript
+origins". After the first Netlify deploy, go back to the OAuth client in Google Cloud Console and add the
+real Netlify URL (e.g. `https://stora-lundby.netlify.app`) alongside `http://localhost:5173`.
 
-### Steg 2: Uppdatera API-konfiguration
+## 4. Smoke-test
 
-I `src/utils/googleAppsScriptApi.js`, ändra:
+1. Open the Netlify URL, fill in the public form, submit, and confirm a new row appears in the
+   `Applications` and `ConsentLog` sheets.
+2. Open `<netlify-url>/admin`, sign in with an email listed in the `Admins` sheet, and confirm the
+   submission shows up with the right activities.
+3. Try signing in with an email **not** on the `Admins` sheet and confirm you're bounced back to the
+   sign-in screen rather than seeing data.
 
-```javascript
-const APPS_SCRIPT_URL = 'https://script.google.com/macros/d/{YOUR_SCRIPT_ID}/usercontent';
-```
+## Troubleshooting
 
-Eller använd environment-variabel:
+### "VITE_APPS_SCRIPT_URL är inte konfigurerad" in production
 
-```bash
-# I Netlify site settings → Environment variables
-VITE_APPS_SCRIPT_URL=https://script.google.com/macros/d/{YOUR_SCRIPT_ID}/usercontent
-```
+The env var wasn't set at build time. Netlify only bakes `VITE_*` vars in at build time, so set it and
+**redeploy** (an existing build won't pick it up retroactively).
 
-### Steg 3: Testa kopplingen
+### Fetch fails with a CORS error on submit
 
-1. Gå till din Netlify-URL
-2. Fylla in test-formuläret
-3. Kontrollera att data sparas i Google Sheets
-4. Bekräfta att samtyckeslogg uppdateras
+Apps Script Web Apps can't answer a CORS preflight. The client always sends `Content-Type:
+text/plain;charset=utf-8` specifically to keep requests as CORS "simple requests" (no preflight) - if
+you've modified `googleAppsScriptApi.js` and started setting `Content-Type: application/json` or adding
+custom headers, that's almost certainly why it broke.
 
-## 🔐 Admin-åtkomst
+### Admin sign-in button doesn't appear, or sign-in fails
 
-### Publicera admin-dashboard
+- Confirm `VITE_GOOGLE_CLIENT_ID` is set for the build.
+- Confirm the page's exact origin is in the OAuth client's "Authorized JavaScript origins".
+- Confirm the Apps Script project's `GOOGLE_CLIENT_ID` script property matches the same client ID -
+  `requireAdmin` rejects tokens whose `aud` claim doesn't match.
 
-1. **Skapa en separat web app för admin**
-   - I Google Apps Script, lägg till fil `Admin.html`
-   - I `doGet()`, lägg till en check:
-   ```javascript
-   if (page === 'admin') {
-     if (!isAdmin(Session.getActiveUser().getEmail())) {
-       return HtmlService.createHtmlOutput('<h1>Åtkomst nekad</h1>');
-     }
-     return HtmlService.createHtmlOutputFromFile('Admin');
-   }
-   ```
+### Signed in, but still see "Åtkomst nekad"
 
-2. **Distribuera web app för admin**
-   - URL: `https://script.google.com/macros/d/{SCRIPT_ID}/usercontent?page=admin`
-   - Kräver Google-konto-inloggning
-   - Admin-åtkomst kontrolleras via `Admins`-fliken i Sheets
+Your email isn't in the `Admins` sheet, or `active` isn't `TRUE`. Add it directly in the sheet for now
+(story C7 - an in-app admin-management screen - hasn't been built yet).
 
-## 📊 Övervaka deployment
+### Data not saving / "Hittade ingen anmälan"
 
-### Netlify Analytics
-- Gå till Site settings → Analytics
-- Se trafik, builds och performance
+- Make sure you deployed a **new version** of the Apps Script after your last edit (see step 1).
+- Check Apps Script → Exekutioner for the actual server-side error.
 
-### Google Apps Script Logs
-- I Apps Script-editorn, klicka "Exekutioner"
-- Se loggar för alla funktionsanrop
+## Production best practices
 
-## 🔄 Uppdatering och rollback
-
-### Uppdatera production
-
-```bash
-git push origin main
-```
-
-Netlify bygger och deployr automatiskt.
-
-### Rollback till tidigare version
-
-1. I Netlify Dashboard, gå till "Deploys"
-2. Välj tidigare deploy
-3. Klicka "Publish deploy"
-
-## ⚠️ Troubleshooting
-
-### "CORS error" eller "Script not found"
-
-- Kontrollera att Google Apps Script-URL:en är rätt
-- Säkerställ att web appen är publicerad (inte sparad som utkast)
-- Testa i Google Apps Script-editorn:
-  ```javascript
-  function testSetup() {
-    Logger.log(getConfig());
-  }
-  ```
-
-### Data sparas inte
-
-- Kontrollera Sheets-permissions (måste vara redigerbara)
-- Se Google Apps Script-loggar för felanmälningar
-- Bekräfta att `applicationId` är unik
-
-### Admin kan inte logga in
-
-- Kontrollera e-post i `Admins`-fliken
-- Säkerställ `active` är `TRUE`
-- Testa inloggning med samma Google-konto som skapad web appen
-
-## 🎯 Production best practices
-
-1. **Använd separate Google Sheets för dev/prod**
-   - Dev: Testdata, mindre Sheet
-   - Prod: Live-data, med backup
-
-2. **Loggning och monitoring**
-   - Lagra error-loggar i separat Sheets-tabell
-   - Övervaka Google Apps Script execution-loggar
-
-3. **Backup**
-   - Google Drive autobackupar Sheets
-   - Exportera data regelbundet till CSV
-
-4. **Säkerhet**
-   - Aldrig publicera Google API-nycklar i kod
-   - Använd environment-variabler för känslig info
-   - Revidera admin-lista regelbundet
-
-## 📱 Mobil optimering
-
-Netlify distribuerar redan en responsiv version. För att testa:
-
-```bash
-npm run build
-npm run preview
-```
-
-Öppna på mobil via `http://<ditt-ip>:4173`
-
----
-
-**Nästa steg**: Se till att GDPR-samtyckestexten är uppdaterad före launch!
+1. Use separate Apps Script projects (and spreadsheets) for dev/test vs. production, each with its own
+   `.env` values.
+2. Review the `Admins` sheet periodically and remove anyone who shouldn't have access anymore.
+3. Google Drive backs up the spreadsheet automatically; export to CSV before a major schema change
+   regardless.

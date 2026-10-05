@@ -1,146 +1,113 @@
 # Stora Lundby - Föräldraengagemang
 
-Ett flexibelt system för att hantera föräldraengagemang, volontärarbete och stödbehov för Stora Lundby Scoutkår.
+Ett system för att samla in och administrera föräldraengagemang (marknadspass, arbetsdagar, lotterigåvor,
+stående roller m.m.) för Stora Lundby Scoutkår.
 
-## 🚀 Funktionalitet
+## Arkitektur
 
-- **Publikt formulär**: Wizard-baserat flöde för föräldrar och volontärer
-- **Admin-dashboard**: Hantera anmälningar, uppdatera status, se samtyckeslogg
-- **GDPR-compliant**: Separat samtyckeslogg, transparent datakälla
-- **Flexibel**: Stöd för flera år och terminer
-- **Google Sheets-integration**: Data lagras i Google Sheets via Google Apps Script
+- **Klient**: React + Vite, två sidor i samma build - `index.html` (publikt formulär) och `admin.html`
+  (admin-dashboard) - deployas till Netlify.
+- **Backend**: Google Apps Script (`Code.gs`), som **bara** svarar med JSON via `doGet`/`doPost`. Den
+  renderar aldrig HTML - `HtmlService` används inte.
+- **Data**: Google Sheets, via Apps Script. Flikarna skapas och fylls med startdata automatiskt första
+  gången backend körs (`initializeProject()`).
+- **Transport**: `fetch()` mot den publicerade Apps Script Web App-URL:en, med JSON skickat som
+  `text/plain` (för att undvika att Apps Script - som inte kan svara på en CORS-preflight - blockerar
+  anropet).
+- **Admin-inloggning**: Google Identity Services ("Sign in with Google") i admin-sidan. Den ID-token som
+  webbläsaren får skickas med varje admin-anrop och verifieras i `Code.gs` mot `Admins`-fliken -
+  `Session.getActiveUser()` används inte, eftersom det inte fungerar tillförlitligt för en fristående SPA.
 
-## 📋 Förutsättningar
+Se `Föräldraengagemang — Codebase Audit & User Stories`-dokumentet för bakgrunden till varför det ser ut
+så här.
 
-- Node.js 16+ och npm
-- Google-konto med Google Apps Script-projekt
-- Netlify-konto (för deployment)
+## Förutsättningar
 
-## 🛠️ Lokal utveckling
+- Node.js 18+ och npm
+- Ett Google-konto för Apps Script-projektet och kalkylarket
+- Ett OAuth 2.0-klient-ID från Google Cloud Console (för admin-inloggningen)
+- Ett Netlify-konto (för deployment av klienten)
 
-### 1. Installera dependencies
+## Lokal utveckling
 
 ```bash
 npm install
-```
-
-### 2. Starta utvecklingsserver
-
-```bash
 npm run dev
 ```
 
-Appen körs på `http://localhost:5173`.
+Appen körs på `http://localhost:5173` (publikt formulär) och `http://localhost:5173/admin.html`
+(admin-dashboard).
 
-### 3. Google Apps Script - lokal setup
+Utan en `.env`-fil körs klienten i **demoläge**: den använder data i minnet istället för att anropa en
+riktig backend, så du kan jobba med UI:t utan att ha satt upp Apps Script än. Så fort
+`VITE_APPS_SCRIPT_URL` är satt (se nedan) pratar klienten med den riktiga backend-en, även i dev.
 
-Om du vill testa mot riktig Google Sheets-data:
+## Sätta upp backend (Google Apps Script)
 
-1. **Skapa ett Google Apps Script-projekt**
-   - Gå till [script.google.com](https://script.google.com)
-   - Klicka "Nytt projekt"
-   - Koda in filen `src/utils/googleAppsScriptBackend.gs` (finns i repot)
+1. **Skapa kalkylarket och Apps Script-projektet**
+   - Gå till [script.google.com](https://script.google.com) och skapa ett nytt projekt (eller kör
+     `clasp create` om ni föredrar CLI).
+   - Klistra in innehållet i `Code.gs` och `appsscript.json` från det här repot.
+2. **Peka ut kalkylarket**
+   - Skapa en ny Google Sheet, kopiera dess ID från URL:en.
+   - I Apps Script: Projektinställningar → Script Properties → lägg till `SPREADSHEET_ID`.
+   - (Saknas `SPREADSHEET_ID` skapar backend-en ett nytt kalkylark automatiskt första gången den körs.)
+3. **Skapa ett OAuth-klient-ID för admin-inloggningen**
+   - I [Google Cloud Console](https://console.cloud.google.com/apis/credentials): skapa ett
+     "OAuth 2.0 Client ID" av typen "Web application".
+   - Lägg till er Netlify-domän (och `http://localhost:5173` för lokal utveckling) under
+     "Authorized JavaScript origins".
+   - I Apps Script: Script Properties → lägg till `GOOGLE_CLIENT_ID` med samma klient-ID. Det används för
+     att verifiera att en inloggnings-token faktiskt var utfärdad till den här appen.
+4. **Publicera som Web App**
+   - Distribuera → Ny distribution → typ "Web app".
+   - "Kör som": ditt konto. "Vem har åtkomst": "Alla" (appen autentiserar admin själv via ID-token, inte
+     via Apps Scripts egen inloggningsmur).
+   - Kopiera URL:en (slutar på `/exec`).
+5. **Lägg till den första admin-användaren**
+   - Öppna kalkylarket, fliken `Admins`, lägg till din e-postadress med `active = TRUE`.
 
-2. **Skapa en Google Sheet**
-   - Skapa en ny Google Sheet
-   - Kopiera dess ID från URL:en
-   - I Apps Script-projektet, gå till "Projektinställningar"
-   - Spara Sheet-ID:t i script properties
+## Konfigurera klienten
 
-3. **Publicera Apps Script som web app**
-   - I Apps Script, klicka "Distribuera" → "Ny distribution"
-   - Välj typ "Web app"
-   - "Kör som": Din Google-konto
-   - "Vem har åtkomst": "Vem som helst"
-   - Kopiera URL:en för web appen
+Skapa en `.env`-fil (se `.env.example`):
 
-4. **Uppdatera API-wrapper** (valfritt för lokal test)
-   - Ändra `src/utils/googleAppsScriptApi.js` för att peka på din web app-URL
+```
+VITE_APPS_SCRIPT_URL=https://script.google.com/macros/s/XXXXXXXXXXXXXXXXXXXXXXXXXXXX/exec
+VITE_GOOGLE_CLIENT_ID=XXXXXXXXXXXX-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX.apps.googleusercontent.com
+```
 
-## 📦 Build och deployment
-
-### Bygga för produktion
+## Build och deployment
 
 ```bash
 npm run build
 ```
 
-Det skapar en `dist/`-mapp med optimerad kod.
+Bygger både `index.html` och `admin.html` till `dist/`. `netlify.toml` pekar Netlify på `npm run build`
+och `dist` som publiceringskatalog, och redirectar `/admin` till `admin.html`.
 
-### Deploy till Netlify
+Sätt `VITE_APPS_SCRIPT_URL` och `VITE_GOOGLE_CLIENT_ID` som miljövariabler i Netlifys build-inställningar
+(Site settings → Environment variables) så att produktionsbygget pratar med rätt backend.
 
-#### Alternativ 1: Via CLI
+## Datastruktur (Google Sheets)
 
-```bash
-npm install -g netlify-cli
-netlify login
-netlify deploy --prod
-```
+- **Activities**: det aktuella terminens händelser (marknadspass, arbetsdag, pysseldag,
+  lotterigåvor, stående roller). `id, year, term, category, label, date, startTime, endTime, location,
+  capacity, active, sortOrder`. Redigeras direkt i kalkylarket tills vidare - en admin-UI för detta är
+  nästa steg (se användarberättelserna B1-B3).
+- **Applications**: alla anmälningar. `id, createdAt, updatedAt, year, term, guardianName, guardianPhone,
+  guardianEmail, scoutName, avdelning, selectedActivities (JSON-array av activity-id:n),
+  ownSuggestionText, comments, status, internalNotes, consentGiven, consentAt, consentVersion`.
+- **ConsentLog**: separat logg för GDPR-samtycke. `applicationId, personName, email, consentGivenAt,
+  consentVersion, consentText, source`.
+- **Config**: `currentYear, currentTerm, submissionDeadline, consentVersion, consentText`.
+- **Admins**: `email, role, active`.
 
-#### Alternativ 2: Via GitHub (rekommenderat)
+## Nästa steg
 
-1. Push koden till GitHub
-2. Länka repot till Netlify
-   - Gå till [app.netlify.com](https://app.netlify.com)
-   - Klicka "Add new site" → "Import an existing project"
-   - Välj GitHub-repot
-   - Build command: `npm run build`
-   - Publish directory: `dist`
-3. Netlify bygger och deployr automatiskt vid varje push
+Se användarberättelserna i audit-dokumentet för resten av backloggen (B1-B3 admin-redigerbara
+aktiviteter, C5-C7 manuell registrering/export/admin-hantering, A6-A7 bekräftelsemail och
+redigera/återta anmälan, D2 gallringsrutin).
 
-## 🔗 Koppla public och admin
-
-### Public form (Netlify)
-
-1. Din Netlify-deploy URL är den publika formulärsidan
-2. Dela denna URL med föräldrar/volontärer
-3. Formuläret skickar data till Google Apps Script
-
-### Admin-dashboard (Google Apps Script web app)
-
-1. Publisera admin-sidan i Google Apps Script
-2. Admin-sidan kräver Google-konto-autentisering
-3. Admin kan se alla inlämningar direkt i Google Sheets
-
-## 🗄️ Datastruktur
-
-Google Sheets innehåller följande flikar:
-
-- **Applications**: Alla inlämningar
-  - id, createdAt, year, term, engagementType, supportArea, name, phone, email, childName, childClass, comments, status, consentGiven, consentAt, consentVersion
-
-- **ConsentLog**: Separat logg för GDPR-samtycke
-  - applicationId, personName, email, consentGivenAt, consentVersion, consentText, source
-
-- **Config**: Konfigurationsvärden
-  - currentYear, currentTerm, consentVersion, consentText
-
-- **Admins**: Admin-användare
-  - email, role, active
-
-## 📝 Environment-variabler (valfritt)
-
-Om du vill anpassa API-endpoints, skapa en `.env`-fil:
-
-```
-VITE_APPS_SCRIPT_URL=https://script.google.com/macros/d/.../usercontent
-```
-
-## 🚀 Nästa steg
-
-1. **Miljö-specifika inställningar**
-   - Skapa separate Google Apps Script-projekt för dev/prod
-   - Använd environment-variabler för endpoints
-
-2. **E-postbekräftelser** (valfritt)
-   - Integrera Gmail API för att skicka bekräftelsemail
-
-3. **Dataimport**
-   - Skapa funktion för att importera befintliga anmälningar från gamla formulär
-
-4. **Rapporter**
-   - Lägg till möjlighet för admin att exportera till CSV/PDF
-
-## 📞 Support
+## Support
 
 Kontakta projektledaren för frågor om setup eller integration.
