@@ -74,9 +74,16 @@ export async function initGoogleSignIn({ onCredential }) {
 
   await loadGsiScript();
 
+  const hostedDomain = import.meta.env.VITE_ADMIN_EMAIL_DOMAIN || 'storalundby.se';
+
   window.google.accounts.id.initialize({
     client_id: clientId,
-    callback: (response) => onCredential(response.credential)
+    callback: (response) => onCredential(response.credential),
+    // Scopes the account picker to this Google Workspace domain. This is a
+    // UX nicety only - the real enforcement is server-side in Code.gs
+    // (requireAdmin checks the verified email's domain and the Admins
+    // sheet), since a client-side hint like this is trivial to bypass.
+    hosted_domain: hostedDomain
   });
 }
 

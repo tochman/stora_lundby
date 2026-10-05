@@ -70,6 +70,9 @@ export function createCodeGsContext() {
   const spreadsheet = new FakeSpreadsheet();
   const scriptProperties = new Map([['SPREADSHEET_ID', 'fake-id']]);
   const sentEmails = [];
+  // Mutable so tests can simulate signing in as a different Google account
+  // before calling requireAdmin/verifyGoogleIdToken.
+  const tokenInfo = { email: 'admin@storalundby.se', email_verified: 'true', aud: 'test-client' };
 
   const context = {
     console,
@@ -106,7 +109,7 @@ export function createCodeGsContext() {
     UrlFetchApp: {
       fetch: () => ({
         getResponseCode: () => 200,
-        getContentText: () => JSON.stringify({ email: 'admin@example.com', email_verified: 'true', aud: 'test-client' })
+        getContentText: () => JSON.stringify(tokenInfo)
       })
     },
     Logger: { log: () => {} }
@@ -116,5 +119,5 @@ export function createCodeGsContext() {
   const source = fs.readFileSync(CODE_GS_PATH, 'utf-8');
   vm.runInContext(source, context, { filename: 'Code.gs' });
 
-  return { context, spreadsheet, sentEmails };
+  return { context, spreadsheet, sentEmails, tokenInfo };
 }

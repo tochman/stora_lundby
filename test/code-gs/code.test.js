@@ -47,6 +47,44 @@ describe('isAdmin', () => {
   });
 });
 
+describe('requireAdmin', () => {
+  beforeEach(() => {
+    ctx.spreadsheet.getSheetByName('Admins').appendRow(['admin@storalundby.se', 'admin', 'TRUE']);
+    ctx.spreadsheet.getSheetByName('Admins').appendRow(['outsider@gmail.com', 'admin', 'TRUE']);
+  });
+
+  it('throws when no idToken is provided', () => {
+    expect(() => ctx.context.requireAdmin({})).toThrow(/inloggning krävs/i);
+  });
+
+  it('grants access to an email on the Admins sheet within the required domain', () => {
+    ctx.tokenInfo.email = 'admin@storalundby.se';
+    expect(ctx.context.requireAdmin({ idToken: 'token' })).toBe('admin@storalundby.se');
+  });
+
+  it('rejects an email outside the configured admin domain even if it is on the Admins sheet', () => {
+    // Defense in depth: domain enforcement happens before the Admins-sheet
+    // lookup, so an accidental non-storalundby.se entry still can't get in.
+    ctx.tokenInfo.email = 'outsider@gmail.com';
+    expect(() => ctx.context.requireAdmin({ idToken: 'token' })).toThrow(/åtkomst nekad/i);
+  });
+
+  it('rejects an in-domain email that is not on the Admins sheet', () => {
+    ctx.tokenInfo.email = 'nobody@storalundby.se';
+    expect(() => ctx.context.requireAdmin({ idToken: 'token' })).toThrow(/åtkomst nekad/i);
+  });
+
+  it('respects a custom adminEmailDomain config value', () => {
+    ctx.context.setConfigValue('adminEmailDomain', 'otherdomain.se');
+    ctx.spreadsheet.getSheetByName('Admins').appendRow(['admin@otherdomain.se', 'admin', 'TRUE']);
+    ctx.tokenInfo.email = 'admin@otherdomain.se';
+    expect(ctx.context.requireAdmin({ idToken: 'token' })).toBe('admin@otherdomain.se');
+
+    ctx.tokenInfo.email = 'admin@storalundby.se';
+    expect(() => ctx.context.requireAdmin({ idToken: 'token' })).toThrow(/åtkomst nekad/i);
+  });
+});
+
 describe('submitApplication validation', () => {
   it('rejects a payload missing a required field', () => {
     const payload = validPayload();

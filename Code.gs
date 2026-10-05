@@ -144,6 +144,12 @@ function requireAdmin(params) {
     throw new Error('Inloggning krävs.');
   }
   var email = verifyGoogleIdToken(idToken);
+
+  var requiredDomain = getConfigValue('adminEmailDomain', 'storalundby.se');
+  if (requiredDomain && !String(email).toLowerCase().endsWith('@' + String(requiredDomain).toLowerCase())) {
+    throw new Error('Åtkomst nekad.');
+  }
+
   if (!isAdmin(email)) {
     throw new Error('Åtkomst nekad.');
   }
@@ -229,6 +235,7 @@ function initializeProject() {
     configSheet.appendRow(['consentVersion', 'v1']);
     configSheet.appendRow(['consentText', 'Jag godkänner att Stora Lundby sparar mina uppgifter för att hantera anmälan och kontakta mig i samband med verksamheten.']);
     configSheet.appendRow(['retentionPeriodMonths', '24']);
+    configSheet.appendRow(['adminEmailDomain', 'storalundby.se']);
   }
 
   if (adminSheet.getLastRow() === 0) {
