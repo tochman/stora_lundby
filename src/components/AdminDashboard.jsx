@@ -103,11 +103,12 @@ export default function AdminDashboard() {
       setActivities(activityList || []);
       setError('');
     } catch (err) {
+      // Always surface why, even when signing back out - a silent bounce
+      // back to the sign-in screen with no explanation is a dead end.
+      setError(err.message || 'Kunde inte ladda data.');
       if (isAuthError(err.message)) {
         googleSignOut();
         setIdToken(null);
-      } else {
-        setError(err.message || 'Kunde inte ladda data.');
       }
     } finally {
       setLoading(false);
