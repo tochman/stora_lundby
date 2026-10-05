@@ -1,17 +1,16 @@
-import { defineConfig } from 'vite';
-import react from '@vitejs/plugin-react';
+[build]
+  command = "npm run build"
+  publish = "dist"
 
-export default defineConfig({
-  plugins: [react()],
-  server: {
-    port: 5173,
-    host: '0.0.0.0',
-    cors: true
-  },
-  build: {
-    outDir: 'dist',
-    sourcemap: false,
-    minify: 'terser',
-    target: ['es2020']
-  }
-});
+[build.environment]
+  NODE_VERSION = "18"
+
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
+
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin.html"
+  status = 200

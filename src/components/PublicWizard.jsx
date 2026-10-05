@@ -1,50 +1,102 @@
-import { useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import api from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
 
-const steps = [1, 2, 3, 4, 5];
+const steps = [1, 2, 3, 4];
 
-const engagementOptions = [
-  { value: 'need-help', label: 'Jag behöver hjälp' },
-  { value: 'volunteer', label: 'Jag vill hjälpa till' },
-  { value: 'organizer', label: 'Jag vill vara ansvarig' }
+const SWEDISH_MONTHS = [
+  'januari', 'februari', 'mars', 'april', 'maj', 'juni',
+  'juli', 'augusti', 'september', 'oktober', 'november', 'december'
 ];
 
-const supportAreas = [
-  'Marknad',
-  'Scout / aktivitet',
-  'Logistik',
-  'Mat och fika',
-  'Kommunikation',
-  'Administration',
-  'Annan'
-];
+function formatActivityDate(isoDate) {
+  if (!isoDate) return '';
+  const [year, month, day] = isoDate.split('-').map(Number);
+  if (!year || !month || !day) return isoDate;
+  return `${day} ${SWEDISH_MONTHS[month - 1]}`;
+}
+
+function formatActivityWhen(activity) {
+  const datePart = formatActivityDate(activity.date);
+  const timePart = activity.startTime && activity.endTime ? `kl ${activity.startTime}-${activity.endTime}` : '';
+  const locationPart = activity.location || '';
+  return [datePart, timePart, locationPart].filter(Boolean).join(', ');
+}
+
+const emptyForm = {
+  guardianName: '',
+  guardianPhone: '',
+  guardianEmail: '',
+  scoutName: '',
+  avdelning: '',
+  selectedActivities: [],
+  ownSuggestionText: '',
+  comments: '',
+  consent: false
+};
 
 export default function PublicWizard() {
   const [step, setStep] = useState(1);
-  const [formData, setFormData] = useState({
-    year: '2026',
-    term: 'Höst',
-    engagementType: '',
-    supportArea: '',
-    name: '',
-    phone: '',
-    email: '',
-    childName: '',
-    childClass: '',
-    comments: '',
-    consent: false
-  });
+  const [formData, setFormData] = useState(emptyForm);
+  const [activities, setActivities] = useState([]);
+  const [config, setConfig] = useState(null);
+  const [loadingActivities, setLoadingActivities] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoadingActivities(true);
+        const [activityList, publicConfig] = await Promise.all([api.getActivities(), api.getConfig()]);
+        if (cancelled) return;
+        setActivities(activityList);
+        setConfig(publicConfig);
+        setLoadError('');
+      } catch (err) {
+        if (!cancelled) {
+          setLoadError(err.message || 'Kunde inte hämta formuläret. Försök igen senare.');
+        }
+      } finally {
+        if (!cancelled) setLoadingActivities(false);
+      }
+    }
+
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const eventActivities = useMemo(
+    () => activities.filter((activity) => activity.category !== 'standing-role'),
+    [activities]
+  );
+  const standingRoleActivities = useMemo(
+    () => activities.filter((activity) => activity.category === 'standing-role'),
+    [activities]
+  );
 
   const updateField = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
+  const toggleActivity = (activityId) => {
+    setFormData((prev) => {
+      const isSelected = prev.selectedActivities.includes(activityId);
+      return {
+        ...prev,
+        selectedActivities: isSelected
+          ? prev.selectedActivities.filter((id) => id !== activityId)
+          : [...prev.selectedActivities, activityId]
+      };
+    });
+  };
+
   const nextStep = () => {
-    if (step < 5) {
+    if (step < steps.length) {
       setStep((current) => current + 1);
       setError('');
     }
@@ -62,8 +114,18 @@ export default function PublicWizard() {
     setError('');
     setSuccess('');
 
-    if (!formData.name || !formData.phone || !formData.email) {
+    if (!formData.guardianName || !formData.guardianPhone || !formData.guardianEmail) {
       setError('Namn, telefon och e-post är obligatoriska.');
+      return;
+    }
+
+    if (!formData.scoutName || !formData.avdelning) {
+      setError('Scoutens namn och avdelning är obligatoriska.');
+      return;
+    }
+
+    if (formData.selectedActivities.includes('own-suggestion') && !formData.ownSuggestionText.trim()) {
+      setError('Beskriv ditt eget förslag innan du skickar in anmälan.');
       return;
     }
 
@@ -75,21 +137,13 @@ export default function PublicWizard() {
     setLoading(true);
 
     try {
-      const result = await api.submitApplication(formData);
-      setSuccess(result.message || 'Din anmälan har mottagits.');
-      setFormData({
-        year: '2026',
-        term: 'Höst',
-        engagementType: '',
-        supportArea: '',
-        name: '',
-        phone: '',
-        email: '',
-        childName: '',
-        childClass: '',
-        comments: '',
-        consent: false
+      const result = await api.submitApplication({
+        year: config?.currentYear,
+        term: config?.currentTerm,
+        ...formData
       });
+      setSuccess(result.message || 'Din anmälan har mottagits.');
+      setFormData(emptyForm);
       setStep(1);
     } catch (err) {
       setError(err.message || 'Något gick fel. Försök igen.');
@@ -98,9 +152,31 @@ export default function PublicWizard() {
     }
   };
 
+  if (loadingActivities) {
+    return (
+      <PublicLayout>
+        <div className="mx-auto max-w-3xl text-center text-slate-600">Laddar formulär...</div>
+      </PublicLayout>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <PublicLayout>
+        <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</div>
+      </PublicLayout>
+    );
+  }
+
   return (
     <PublicLayout>
       <div className="mx-auto max-w-3xl">
+        {config?.submissionDeadline && (
+          <p className="mb-6 text-center text-sm font-semibold text-brand-600">
+            Lämnas till scoutledare senast {formatActivityDate(config.submissionDeadline)}
+          </p>
+        )}
+
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between gap-2">
             {steps.map((item) => (
@@ -115,28 +191,58 @@ export default function PublicWizard() {
             ))}
           </div>
           <div className="h-2 rounded-full bg-slate-200">
-            <div className="h-2 rounded-full bg-brand-500 transition-all" style={{ width: `${(step / 5) * 100}%` }} />
+            <div className="h-2 rounded-full bg-brand-500 transition-all" style={{ width: `${(step / steps.length) * 100}%` }} />
           </div>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {step === 1 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">1. Välj år och termin</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="year">År</label>
-                  <select id="year" value={formData.year} onChange={(e) => updateField('year', e.target.value)} className="input">
-                    <option value="2026">2026</option>
-                    <option value="2027">2027</option>
-                  </select>
+            <div className="space-y-6">
+              <div className="space-y-3">
+                <h2 className="text-2xl font-bold text-slate-800">Kryssa i vad du kan hjälpa till med</h2>
+                <div className="space-y-2">
+                  {eventActivities.map((activity) => (
+                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                        checked={formData.selectedActivities.includes(activity.id)}
+                        onChange={() => toggleActivity(activity.id)}
+                      />
+                      <span>
+                        <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
+                        <span className="block text-slate-600">{activity.label}</span>
+                      </span>
+                    </label>
+                  ))}
                 </div>
-                <div>
-                  <label className="label" htmlFor="term">Termin</label>
-                  <select id="term" value={formData.term} onChange={(e) => updateField('term', e.target.value)} className="input">
-                    <option value="Höst">Höst</option>
-                    <option value="Vår">Vår</option>
-                  </select>
+              </div>
+
+              <div className="space-y-3">
+                <h3 className="text-lg font-bold text-slate-800">Jag kan ställa upp till följande</h3>
+                <div className="space-y-2">
+                  {standingRoleActivities.map((activity) => (
+                    <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
+                      <label className="flex items-start gap-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                          checked={formData.selectedActivities.includes(activity.id)}
+                          onChange={() => toggleActivity(activity.id)}
+                        />
+                        <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
+                      </label>
+                      {activity.id === 'own-suggestion' && formData.selectedActivities.includes('own-suggestion') && (
+                        <input
+                          type="text"
+                          value={formData.ownSuggestionText}
+                          onChange={(e) => updateField('ownSuggestionText', e.target.value)}
+                          className="input mt-2"
+                          placeholder="Beskriv ditt förslag"
+                        />
+                      )}
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -144,74 +250,39 @@ export default function PublicWizard() {
 
           {step === 2 && (
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">2. Vilken typ av engagemang?</h2>
-              <div>
-                <label className="label" htmlFor="engagementType">Jag vill</label>
-                <select
-                  id="engagementType"
-                  value={formData.engagementType}
-                  onChange={(e) => updateField('engagementType', e.target.value)}
-                  className="input"
-                >
-                  <option value="">Välj</option>
-                  {engagementOptions.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
+              <h2 className="text-2xl font-bold text-slate-800">Uppgifter om mig som vårdnadshavare</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="guardianName">Namn</label>
+                  <input id="guardianName" type="text" value={formData.guardianName} onChange={(e) => updateField('guardianName', e.target.value)} className="input" />
+                </div>
+                <div>
+                  <label className="label" htmlFor="guardianPhone">Telefon</label>
+                  <input id="guardianPhone" type="tel" value={formData.guardianPhone} onChange={(e) => updateField('guardianPhone', e.target.value)} className="input" />
+                </div>
+                <div className="md:col-span-2">
+                  <label className="label" htmlFor="guardianEmail">E-post</label>
+                  <input id="guardianEmail" type="email" value={formData.guardianEmail} onChange={(e) => updateField('guardianEmail', e.target.value)} className="input" />
+                </div>
               </div>
 
-              <div>
-                <label className="label" htmlFor="supportArea">Typ av stöd</label>
-                <select
-                  id="supportArea"
-                  value={formData.supportArea}
-                  onChange={(e) => updateField('supportArea', e.target.value)}
-                  className="input"
-                >
-                  <option value="">Välj (valfritt)</option>
-                  {supportAreas.map((area) => (
-                    <option key={area} value={area}>
-                      {area}
-                    </option>
-                  ))}
-                </select>
+              <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är vårdnadshavare till följande scout</h2>
+              <div className="grid gap-4 md:grid-cols-2">
+                <div>
+                  <label className="label" htmlFor="scoutName">Namn</label>
+                  <input id="scoutName" type="text" value={formData.scoutName} onChange={(e) => updateField('scoutName', e.target.value)} className="input" />
+                </div>
+                <div>
+                  <label className="label" htmlFor="avdelning">Avdelning</label>
+                  <input id="avdelning" type="text" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input" />
+                </div>
               </div>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">3. Kontaktuppgifter</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="name">Namn</label>
-                  <input id="name" type="text" value={formData.name} onChange={(e) => updateField('name', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="phone">Telefon</label>
-                  <input id="phone" type="tel" value={formData.phone} onChange={(e) => updateField('phone', e.target.value)} className="input" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="label" htmlFor="email">E-post</label>
-                  <input id="email" type="email" value={formData.email} onChange={(e) => updateField('email', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="childName">Barnets namn</label>
-                  <input id="childName" type="text" value={formData.childName} onChange={(e) => updateField('childName', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="childClass">Klass / årskurs</label>
-                  <input id="childClass" type="text" value={formData.childClass} onChange={(e) => updateField('childClass', e.target.value)} className="input" />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">4. Övrig information</h2>
+              <h2 className="text-2xl font-bold text-slate-800">Övrig information</h2>
               <div>
                 <label className="label" htmlFor="comments">Kommentar</label>
                 <textarea
@@ -225,11 +296,11 @@ export default function PublicWizard() {
             </div>
           )}
 
-          {step === 5 && (
+          {step === 4 && (
             <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">5. GDPR-samtycke</h2>
+              <h2 className="text-2xl font-bold text-slate-800">GDPR-samtycke</h2>
               <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-                <p>Jag godkänner att Stora Lundby sparar mina uppgifter för att administrera min anmälan och kontakta mig i samband med verksamheten.</p>
+                <p>{config?.consentText}</p>
               </div>
               <label className="flex items-start gap-3 text-sm text-slate-700">
                 <input
@@ -251,7 +322,7 @@ export default function PublicWizard() {
               Tillbaka
             </button>
 
-            {step < 5 ? (
+            {step < steps.length ? (
               <button type="button" className="btn btn-primary" onClick={nextStep}>
                 Nästa
               </button>
