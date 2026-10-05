@@ -168,6 +168,19 @@ export default function PublicWizard() {
     );
   }
 
+  const deadlinePassed = config?.submissionDeadline && new Date() > new Date(`${config.submissionDeadline}T23:59:59`);
+
+  if (deadlinePassed) {
+    return (
+      <PublicLayout>
+        <div className="mx-auto max-w-3xl rounded-lg border border-slate-200 bg-slate-50 p-6 text-center text-slate-700">
+          <h2 className="mb-2 text-xl font-bold text-slate-800">Anmälningstiden har gått ut</h2>
+          <p>Sista anmälningsdag var {formatActivityDate(config.submissionDeadline)}. Kontakta en scoutledare om du ändå behöver anmäla dig.</p>
+        </div>
+      </PublicLayout>
+    );
+  }
+
   return (
     <PublicLayout>
       <div className="mx-auto max-w-3xl">

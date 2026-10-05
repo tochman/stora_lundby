@@ -477,33 +477,70 @@ function submitApplication(payload) {
     throw new Error('Beskriv ditt eget förslag innan du skickar in anmälan.');
   }
 
-  var applicationId = Utilities.getUuid();
+  var deadline = getConfigValue('submissionDeadline', '');
+  if (deadline && new Date() > new Date(deadline + 'T23:59:59')) {
+    throw new Error('Anmälningstiden har gått ut (sista dag var ' + deadline + '). Kontakta en scoutledare om du ändå behöver anmäla dig.');
+  }
+
   var now = new Date();
   var consentVersion = getConfigValue('consentVersion', 'v1');
   var consentText = getConfigValue('consentText', 'Jag godkänner att uppgifterna sparas.');
 
-  var row = [
-    applicationId,
-    now,
-    now,
-    data.year,
-    data.term,
-    data.guardianName,
-    data.guardianPhone,
-    data.guardianEmail,
-    data.scoutName,
-    data.avdelning,
-    JSON.stringify(selectedActivities),
-    data.ownSuggestionText || '',
-    data.comments || '',
-    'Ny',
-    '',
-    'TRUE',
-    now,
-    consentVersion
-  ];
+  // A guardian resubmitting for the same year/term is treated as editing
+  // their existing response, not filing a duplicate one (story A7).
+  var sheet = getSheetByName(SHEET_NAMES.applications);
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var emailCol = headers.indexOf('guardianEmail');
+  var yearCol = headers.indexOf('year');
+  var termCol = headers.indexOf('term');
+  var idCol = headers.indexOf('id');
+  var createdAtCol = headers.indexOf('createdAt');
+  var statusCol = headers.indexOf('status');
+  var notesCol = headers.indexOf('internalNotes');
 
-  getSheetByName(SHEET_NAMES.applications).appendRow(row);
+  var existingRowIndex = -1;
+  for (var i = 1; i < values.length; i += 1) {
+    if (String(values[i][emailCol]).trim().toLowerCase() === String(data.guardianEmail).trim().toLowerCase() &&
+        String(values[i][yearCol]) === String(data.year) &&
+        String(values[i][termCol]) === String(data.term)) {
+      existingRowIndex = i;
+      break;
+    }
+  }
+
+  var applicationId = existingRowIndex === -1 ? Utilities.getUuid() : values[existingRowIndex][idCol];
+  var createdAt = existingRowIndex === -1 ? now : values[existingRowIndex][createdAtCol];
+  var status = existingRowIndex === -1 ? 'Ny' : values[existingRowIndex][statusCol];
+  var internalNotes = existingRowIndex === -1 ? '' : values[existingRowIndex][notesCol];
+
+  var rowByHeader = {
+    id: applicationId,
+    createdAt: createdAt,
+    updatedAt: now,
+    year: data.year,
+    term: data.term,
+    guardianName: data.guardianName,
+    guardianPhone: data.guardianPhone,
+    guardianEmail: data.guardianEmail,
+    scoutName: data.scoutName,
+    avdelning: data.avdelning,
+    selectedActivities: JSON.stringify(selectedActivities),
+    ownSuggestionText: data.ownSuggestionText || '',
+    comments: data.comments || '',
+    status: status,
+    internalNotes: internalNotes,
+    consentGiven: 'TRUE',
+    consentAt: now,
+    consentVersion: consentVersion
+  };
+  var rowValues = headers.map(function (header) { return rowByHeader[header] !== undefined ? rowByHeader[header] : ''; });
+
+  if (existingRowIndex === -1) {
+    sheet.appendRow(rowValues);
+  } else {
+    sheet.getRange(existingRowIndex + 1, 1, 1, rowValues.length).setValues([rowValues]);
+  }
 
   getSheetByName(SHEET_NAMES.consentLog).appendRow([
     applicationId,
@@ -517,13 +554,46 @@ function submitApplication(payload) {
 
   var activitiesById = {};
   getActivitiesRaw().forEach(function (activity) { activitiesById[activity.id] = activity; });
+  var selectedActivityObjects = selectedActivities.map(function (id) { return activitiesById[id] || { id: id, label: id }; });
+  var wasUpdate = existingRowIndex !== -1;
+
+  sendConfirmationEmail(data, selectedActivityObjects, wasUpdate);
 
   return {
     ok: true,
     id: applicationId,
-    message: 'Din anmälan har sparats.',
-    selectedActivities: selectedActivities.map(function (id) { return activitiesById[id] || { id: id, label: id }; })
+    message: wasUpdate ? 'Din tidigare anmälan för den här terminen har uppdaterats.' : 'Din anmälan har sparats.',
+    selectedActivities: selectedActivityObjects
   };
+}
+
+function sendConfirmationEmail(data, selectedActivityObjects, wasUpdate) {
+  try {
+    var lines = selectedActivityObjects.map(function (activity) {
+      var when = [
+        activity.date,
+        activity.startTime && activity.endTime ? 'kl ' + activity.startTime + '-' + activity.endTime : '',
+        activity.location
+      ].filter(function (part) { return part; }).join(', ');
+      return '- ' + activity.label + (when ? ' (' + when + ')' : '');
+    });
+
+    var body = 'Hej ' + data.guardianName + ',\n\n' +
+      (wasUpdate ? 'Din anmälan har uppdaterats. Du har nu valt:' : 'Tack för din anmälan! Du har valt:') + '\n\n' +
+      (lines.length ? lines.join('\n') : '(Inga aktiviteter valda)') +
+      (data.ownSuggestionText ? '\n\nEget förslag: ' + data.ownSuggestionText : '') +
+      '\n\nScout: ' + data.scoutName + ' (' + data.avdelning + ')' +
+      '\n\nOm något är fel, fyll i formuläret igen med samma e-postadress så uppdateras din anmälan.' +
+      '\n\nHälsningar,\nStora Lundby Scoutkår';
+
+    MailApp.sendEmail({
+      to: data.guardianEmail,
+      subject: 'Bekräftelse - Föräldraengagemang Stora Lundby',
+      body: body
+    });
+  } catch (error) {
+    console.warn('Kunde inte skicka bekräftelsemail: ' + error.message);
+  }
 }
 
 function getApplications() {
