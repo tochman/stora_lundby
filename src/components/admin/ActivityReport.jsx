@@ -23,6 +23,7 @@ export default function ActivityReport({ idToken }) {
   const [applications, setApplications] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
 
   const load = async () => {
@@ -37,6 +38,7 @@ export default function ActivityReport({ idToken }) {
       setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
       setApplications(apps || []);
       setError('');
+      setHasLoaded(true);
     } catch (err) {
       setError(err.message || 'Kunde inte ladda data.');
     } finally {
@@ -80,6 +82,14 @@ export default function ActivityReport({ idToken }) {
   const generatedOn = new Date().toLocaleDateString('sv-SE');
 
   if (loading) return <LoadingOverlay />;
+
+  if (error && !hasLoaded) {
+    return (
+      <div className="space-y-6">
+        <ErrorBanner message={error} onRetry={load} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

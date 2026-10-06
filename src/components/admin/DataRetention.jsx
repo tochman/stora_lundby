@@ -10,6 +10,7 @@ export default function DataRetention({ idToken }) {
   const [purgeLog, setPurgeLog] = useState([]);
   const [purgeForm, setPurgeForm] = useState({ year: '', term: '' });
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [purging, setPurging] = useState(false);
@@ -31,6 +32,7 @@ export default function DataRetention({ idToken }) {
       setApplications(apps || []);
       setPurgeLog(log || []);
       setError('');
+      setHasLoaded(true);
     } catch (err) {
       setError(err.message || 'Kunde inte ladda data.');
     } finally {
@@ -86,6 +88,14 @@ export default function DataRetention({ idToken }) {
   };
 
   if (loading) return <LoadingOverlay />;
+
+  if (error && !hasLoaded) {
+    return (
+      <div className="space-y-6">
+        <ErrorBanner message={error} onRetry={load} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

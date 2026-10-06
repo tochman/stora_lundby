@@ -7,6 +7,7 @@ export default function AdminsManager({ idToken, currentEmail }) {
   const [admins, setAdmins] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [togglingEmail, setTogglingEmail] = useState(null);
@@ -17,6 +18,7 @@ export default function AdminsManager({ idToken, currentEmail }) {
       const list = await api.getAdmins(idToken);
       setAdmins(list);
       setError('');
+      setHasLoaded(true);
     } catch (err) {
       setError(err.message || 'Kunde inte ladda adminlistan.');
     } finally {
@@ -61,6 +63,14 @@ export default function AdminsManager({ idToken, currentEmail }) {
   };
 
   if (loading) return <LoadingOverlay label="Laddar admins..." />;
+
+  if (error && !hasLoaded) {
+    return (
+      <div className="space-y-6">
+        <ErrorBanner message={error} onRetry={load} />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">

@@ -117,6 +117,7 @@ export default function ActivitiesManager({ idToken }) {
   const [newActivity, setNewActivity] = useState(emptyDraft);
   const [copyForm, setCopyForm] = useState({ fromYear: '', fromTerm: '', toYear: '', toTerm: '' });
   const [loading, setLoading] = useState(true);
+  const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [savingConfig, setSavingConfig] = useState(false);
@@ -137,6 +138,7 @@ export default function ActivitiesManager({ idToken }) {
       setConfig(publicConfig);
       setConfigDraft(publicConfig);
       setError('');
+      setHasLoaded(true);
     } catch (err) {
       setError(err.message || 'Kunde inte ladda aktiviteter.');
     } finally {
@@ -249,6 +251,14 @@ export default function ActivitiesManager({ idToken }) {
 
   if (loading) return <LoadingOverlay label="Laddar aktiviteter..." />;
 
+  if (error && !hasLoaded) {
+    return (
+      <div className="space-y-6">
+        <ErrorBanner message={error} onRetry={load} />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {error && <ErrorBanner message={error} onRetry={load} />}
@@ -286,25 +296,6 @@ export default function ActivitiesManager({ idToken }) {
             </div>
           </div>
         )}
-      </section>
-
-      <section className="card">
-        <h2 className="mb-4 text-xl font-bold text-slate-800">Kopiera föregående termins aktiviteter</h2>
-        <form onSubmit={copyFromPreviousTerm} className="grid gap-4 md:grid-cols-5">
-          <input className="input" placeholder="Från år (t.ex. 2026)" value={copyForm.fromYear} onChange={(e) => setCopyForm((p) => ({ ...p, fromYear: e.target.value }))} />
-          <select className="input" value={copyForm.fromTerm} onChange={(e) => setCopyForm((p) => ({ ...p, fromTerm: e.target.value }))}>
-            <option value="">Från termin</option>
-            <option value="Höst">Höst</option>
-            <option value="Vår">Vår</option>
-          </select>
-          <input className="input" placeholder="Till år" value={copyForm.toYear} onChange={(e) => setCopyForm((p) => ({ ...p, toYear: e.target.value }))} />
-          <select className="input" value={copyForm.toTerm} onChange={(e) => setCopyForm((p) => ({ ...p, toTerm: e.target.value }))}>
-            <option value="">Till termin</option>
-            <option value="Höst">Höst</option>
-            <option value="Vår">Vår</option>
-          </select>
-          <button type="submit" className="btn btn-primary" disabled={copying}>{copying ? 'Kopierar...' : 'Kopiera'}</button>
-        </form>
       </section>
 
       <section className="card">
@@ -383,6 +374,30 @@ export default function ActivitiesManager({ idToken }) {
           <button type="submit" className="btn btn-primary" disabled={addingActivity}>{addingActivity ? 'Lägger till...' : 'Lägg till'}</button>
         </form>
       </section>
+
+      <details className="card">
+        <summary className="cursor-pointer text-xl font-bold text-slate-800">
+          Avancerat: kopiera föregående termins aktiviteter
+        </summary>
+        <p className="mt-2 mb-4 text-sm text-slate-500">
+          Skapar kopior av en termins aktiviteter under en ny termin, så att de bara behöver nya datum istället för att skrivas från grunden.
+        </p>
+        <form onSubmit={copyFromPreviousTerm} className="grid gap-4 md:grid-cols-5">
+          <input className="input" placeholder="Från år (t.ex. 2026)" value={copyForm.fromYear} onChange={(e) => setCopyForm((p) => ({ ...p, fromYear: e.target.value }))} />
+          <select className="input" value={copyForm.fromTerm} onChange={(e) => setCopyForm((p) => ({ ...p, fromTerm: e.target.value }))}>
+            <option value="">Från termin</option>
+            <option value="Höst">Höst</option>
+            <option value="Vår">Vår</option>
+          </select>
+          <input className="input" placeholder="Till år" value={copyForm.toYear} onChange={(e) => setCopyForm((p) => ({ ...p, toYear: e.target.value }))} />
+          <select className="input" value={copyForm.toTerm} onChange={(e) => setCopyForm((p) => ({ ...p, toTerm: e.target.value }))}>
+            <option value="">Till termin</option>
+            <option value="Höst">Höst</option>
+            <option value="Vår">Vår</option>
+          </select>
+          <button type="submit" className="btn btn-primary" disabled={copying}>{copying ? 'Kopierar...' : 'Kopiera'}</button>
+        </form>
+      </details>
     </div>
   );
 }

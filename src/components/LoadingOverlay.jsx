@@ -2,14 +2,16 @@ import { useEffect, useState } from 'react';
 
 // Shown after waiting a while, in order - Apps Script round trips can
 // genuinely take several seconds, and a loader that just sits still past
-// ~5s reads as broken. Keeps the overlay itself unbroken by the backend's
+// ~3s reads as broken. Keeps the overlay itself unbroken by the backend's
 // 25s request timeout (see googleAppsScriptApi.js) - it never gets here.
 const PATIENCE_MESSAGES = [
   'Ha lite tålamod...',
   'Vi laddar fortfarande...',
-  'En snabb databas är dyr...'
+  'En snabb databas är dyr...',
+  'Google Sheets är gratis...',
+  '..men långsamt...',
 ];
-const MESSAGE_INTERVAL_MS = 5000;
+const MESSAGE_INTERVAL_MS = 3000;
 
 // A greyed-out, full-screen overlay with the troop's logo pulsing in the
 // center, shown while waiting on the backend. Used instead of a plain
