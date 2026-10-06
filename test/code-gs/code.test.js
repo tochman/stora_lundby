@@ -311,6 +311,47 @@ describe('config round trip', () => {
   });
 });
 
+describe('caching of config and activities reads', () => {
+  it('getPublicConfig only hits the sheet once across repeated calls', () => {
+    const configSheet = ctx.spreadsheet.getSheetByName('Config');
+    const before = configSheet.getDataRangeCalls;
+    ctx.context.getPublicConfig();
+    ctx.context.getPublicConfig();
+    ctx.context.getPublicConfig();
+    expect(configSheet.getDataRangeCalls).toBe(before + 1);
+  });
+
+  it('setConfigValue invalidates the config cache, so the next read sees the new value', () => {
+    ctx.context.getPublicConfig();
+    ctx.context.setConfigValue('currentTerm', 'Vår');
+    expect(ctx.context.getPublicConfig().currentTerm).toBe('Vår');
+    expect(ctx.context.getConfigValue('currentTerm')).toBe('Vår');
+  });
+
+  it('getActivitiesRaw only hits the sheet once across repeated calls', () => {
+    const activitiesSheet = ctx.spreadsheet.getSheetByName('Activities');
+    const before = activitiesSheet.getDataRangeCalls;
+    ctx.context.getActivitiesRaw();
+    ctx.context.getActivitiesRaw();
+    expect(activitiesSheet.getDataRangeCalls).toBe(before + 1);
+  });
+
+  it('upsertActivity invalidates the activities cache, so the next read sees the change', () => {
+    ctx.context.getActivitiesRaw();
+    ctx.context.upsertActivity({ id: 'new-activity', year: '2026', term: 'Höst', category: 'workday', label: 'Ny aktivitet', active: true, sortOrder: 99 });
+    const labels = ctx.context.getActivitiesRaw().map((a) => a.label);
+    expect(labels).toContain('Ny aktivitet');
+  });
+
+  it('deleteActivity invalidates the activities cache, so the next read no longer includes it', () => {
+    ctx.context.upsertActivity({ id: 'temp-activity', year: '2026', term: 'Höst', category: 'workday', label: 'Tillfällig', active: true, sortOrder: 99 });
+    ctx.context.getActivitiesRaw();
+    ctx.context.deleteActivity('temp-activity');
+    const ids = ctx.context.getActivitiesRaw().map((a) => a.id);
+    expect(ids).not.toContain('temp-activity');
+  });
+});
+
 describe('purgeTermData', () => {
   it('deletes matching Applications and ConsentLog rows and logs only counts', () => {
     ctx.context.submitApplication(validPayload());

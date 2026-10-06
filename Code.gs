@@ -363,16 +363,22 @@ function normalizeConfigValue(value) {
   return value;
 }
 
+// Config and activities are read on every public form load but change
+// rarely (an admin editing them is a deliberate, occasional action) - cache
+// them between executions the same way initializeProject's existence check
+// already is. A 5-minute TTL bounds staleness even if an invalidation is
+// ever missed; the mutation paths (setConfigValue, upsertActivity,
+// deleteActivity) also clear the relevant entry immediately so admin edits
+// show up on the next request rather than waiting out the TTL.
+var CACHE_TTL_SECONDS = 300;
+
 function getConfigValue(key, defaultValue) {
-  var configSheet = getSheetByName(SHEET_NAMES.config);
-  var values = configSheet.getDataRange().getValues();
-  for (var i = 1; i < values.length; i += 1) {
-    var row = values[i];
-    if (String(row[0]).trim().toLowerCase() === String(key).trim().toLowerCase()) {
-      return normalizeConfigValue(row[1]);
-    }
-  }
-  return defaultValue;
+  var config = getPublicConfig();
+  var wanted = String(key).trim().toLowerCase();
+  var foundKey = Object.keys(config).filter(function (k) {
+    return String(k).trim().toLowerCase() === wanted;
+  })[0];
+  return foundKey !== undefined ? config[foundKey] : defaultValue;
 }
 
 function setConfigValue(key, value) {
@@ -381,19 +387,28 @@ function setConfigValue(key, value) {
   for (var i = 1; i < values.length; i += 1) {
     if (String(values[i][0]).trim().toLowerCase() === String(key).trim().toLowerCase()) {
       configSheet.getRange(i + 1, 2).setValue(value);
+      CacheService.getScriptCache().remove('publicConfig');
       return;
     }
   }
   configSheet.appendRow([key, value]);
+  CacheService.getScriptCache().remove('publicConfig');
 }
 
 function getPublicConfig() {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('publicConfig');
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
   var configSheet = getSheetByName(SHEET_NAMES.config);
   var values = configSheet.getDataRange().getValues();
   var config = {};
   for (var i = 1; i < values.length; i += 1) {
     config[values[i][0]] = normalizeConfigValue(values[i][1]);
   }
+  cache.put('publicConfig', JSON.stringify(config), CACHE_TTL_SECONDS);
   return config;
 }
 
@@ -409,7 +424,13 @@ function updateConfigEntries(updates) {
 // ---------------------------------------------------------------------------
 
 function getActivitiesRaw() {
-  return sheetRowsAsObjects(SHEET_NAMES.activities).map(function (row) {
+  var cache = CacheService.getScriptCache();
+  var cached = cache.get('activitiesRaw');
+  if (cached) {
+    return JSON.parse(cached);
+  }
+
+  var raw = sheetRowsAsObjects(SHEET_NAMES.activities).map(function (row) {
     return {
       id: String(row.id),
       year: String(row.year || ''),
@@ -425,6 +446,8 @@ function getActivitiesRaw() {
       sortOrder: Number(row.sortOrder) || 0
     };
   });
+  cache.put('activitiesRaw', JSON.stringify(raw), CACHE_TTL_SECONDS);
+  return raw;
 }
 
 function getActivities(year, term) {
@@ -463,11 +486,13 @@ function upsertActivity(activity) {
   for (var i = 1; i < values.length; i += 1) {
     if (String(values[i][idCol]) === String(id)) {
       sheet.getRange(i + 1, 1, 1, rowValues.length).setValues([rowValues]);
+      CacheService.getScriptCache().remove('activitiesRaw');
       return { ok: true, id: id };
     }
   }
 
   sheet.appendRow(rowValues);
+  CacheService.getScriptCache().remove('activitiesRaw');
   return { ok: true, id: id };
 }
 
@@ -483,6 +508,7 @@ function deleteActivity(id) {
   for (var i = 1; i < values.length; i += 1) {
     if (String(values[i][idCol]) === String(id)) {
       sheet.deleteRow(i + 1);
+      CacheService.getScriptCache().remove('activitiesRaw');
       return { ok: true };
     }
   }

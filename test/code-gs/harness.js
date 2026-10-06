@@ -30,6 +30,7 @@ class FakeSheet {
     this.name = name;
     this.rows = [];
     this.formats = {};
+    this.getDataRangeCalls = 0;
   }
 
   appendRow(row) {
@@ -37,6 +38,7 @@ class FakeSheet {
   }
 
   getDataRange() {
+    this.getDataRangeCalls += 1;
     const rows = this.rows;
     return { getValues: () => rows.map((row) => row.slice()) };
   }
@@ -150,7 +152,8 @@ export function createCodeGsContext() {
         const store = new Map();
         return () => ({
           get: (key) => (store.has(key) ? store.get(key) : null),
-          put: (key, value) => store.set(key, value)
+          put: (key, value) => store.set(key, value),
+          remove: (key) => store.delete(key)
         });
       })()
     }
