@@ -257,6 +257,18 @@ describe('submitApplication writes', () => {
     expect(ctx.spreadsheet.getSheetByName('ConsentLog').rows.slice(1)).toHaveLength(2);
   });
 
+  it('treats the same email in a different year/term as a separate submission, not an overwrite', () => {
+    ctx.context.submitApplication(validPayload());
+    ctx.context.submitApplication({ ...validPayload(), year: '2027', term: 'Vår' });
+
+    const rows = applicationRows();
+    expect(rows).toHaveLength(2);
+
+    const headers = applicationsHeaders();
+    const terms = rows.map((row) => Object.fromEntries(headers.map((h, i) => [h, row[i]]))).map((r) => `${r.year}-${r.term}`);
+    expect(terms).toEqual(['2026-Höst', '2027-Vår']);
+  });
+
   it('preserves status and internal notes across an edit', () => {
     ctx.context.submitApplication(validPayload());
     const idCol = applicationsHeaders().indexOf('id');
