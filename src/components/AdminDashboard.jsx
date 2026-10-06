@@ -203,7 +203,14 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        {error && <ErrorBanner message={error} onRetry={() => loadDashboard(idToken)} />}
+        {/* This error/retry is about loadDashboard's own data (applications,
+            summary, the activities list used for filtering) - it belongs on
+            the Anmälningar tab that actually shows that data. Aktiviteter,
+            Admins, Dataskydd and Rapporter each load their own data and show
+            their own ErrorBanner; showing this one on top of their
+            successfully-loaded content was confusing - looked like "this
+            screen is broken" when it wasn't. */}
+        {view === 'applications' && error && <ErrorBanner message={error} onRetry={() => loadDashboard(idToken)} />}
 
         {view === 'activities' && <ActivitiesManager idToken={idToken} />}
         {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}

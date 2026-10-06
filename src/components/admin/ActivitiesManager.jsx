@@ -124,6 +124,7 @@ export default function ActivitiesManager({ idToken }) {
   const [addingActivity, setAddingActivity] = useState(false);
   const [copying, setCopying] = useState(false);
   const [dragState, setDragState] = useState({ draggedId: null, overId: null });
+  const [showInactive, setShowInactive] = useState(false);
 
   const load = async () => {
     try {
@@ -154,6 +155,12 @@ export default function ActivitiesManager({ idToken }) {
   const locationOptions = useMemo(
     () => [...new Set(activities.map((a) => a.location).filter(Boolean))].sort(),
     [activities]
+  );
+
+  const inactiveCount = useMemo(() => activities.filter((a) => !a.active).length, [activities]);
+  const visibleActivities = useMemo(
+    () => (showInactive ? activities : activities.filter((a) => a.active)),
+    [activities, showInactive]
   );
 
   const saveConfig = async () => {
@@ -299,7 +306,13 @@ export default function ActivitiesManager({ idToken }) {
       </section>
 
       <section className="card">
-        <h2 className="mb-4 text-xl font-bold text-slate-800">Aktiviteter</h2>
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-slate-800">Aktiviteter</h2>
+          <label className="flex items-center gap-2 text-sm text-slate-600">
+            <input type="checkbox" checked={showInactive} onChange={(e) => setShowInactive(e.target.checked)} />
+            Visa inaktiva{inactiveCount > 0 ? ` (${inactiveCount})` : ''}
+          </label>
+        </div>
         <p className="mb-4 text-sm text-slate-500">Dra i <span aria-hidden="true">⠿</span> för att ändra ordningen de visas i på formuläret.</p>
         <div className="overflow-x-auto">
           <table className="min-w-full text-left text-sm">
@@ -318,7 +331,7 @@ export default function ActivitiesManager({ idToken }) {
               </tr>
             </thead>
             <tbody>
-              {activities.map((activity) => (
+              {visibleActivities.map((activity) => (
                 <ActivityRow
                   key={activity.id}
                   activity={activity}
