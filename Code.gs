@@ -569,13 +569,21 @@ function writeApplicationRow(sheet, headers, rowValues, existingRowIndex) {
 
 function submitApplication(payload) {
   var data = payload || {};
-  var requiredFields = ['year', 'term', 'guardianName', 'guardianPhone', 'guardianEmail', 'scoutName', 'avdelning'];
+  var requiredFields = ['year', 'term', 'guardianName', 'guardianPhone', 'guardianEmail'];
 
   requiredFields.forEach(function (fieldName) {
     if (!data[fieldName]) {
       throw new Error('Fältet "' + fieldName + '" saknas eller är tomt.');
     }
   });
+
+  // scoutName/avdelning are only required for guardians of an enrolled
+  // scout - older members of the association (board, Rover, adult leaders
+  // with no child enrolled) check noScoutChild instead and skip them.
+  var noScoutChild = String(data.noScoutChild).toLowerCase() === 'true';
+  if (!noScoutChild && (!data.scoutName || !data.avdelning)) {
+    throw new Error('Scoutens namn och avdelning är obligatoriska, eller ange att du inte har något barn i scouterna.');
+  }
 
   if (String(data.consent).toLowerCase() !== 'true') {
     throw new Error('Du måste godkänna GDPR-samtycke för att skicka in anmälan.');
@@ -686,7 +694,7 @@ function sendConfirmationEmail(data, selectedActivityObjects, wasUpdate) {
       (wasUpdate ? 'Din anmälan har uppdaterats. Du har nu valt:' : 'Tack för din anmälan! Du har valt:') + '\n\n' +
       (lines.length ? lines.join('\n') : '(Inga aktiviteter valda)') +
       (data.ownSuggestionText ? '\n\nEget förslag: ' + data.ownSuggestionText : '') +
-      '\n\nScout: ' + data.scoutName + ' (' + data.avdelning + ')' +
+      (data.scoutName ? '\n\nScout: ' + data.scoutName + (data.avdelning ? ' (' + data.avdelning + ')' : '') : '') +
       '\n\nOm något är fel, fyll i formuläret igen med samma e-postadress så uppdateras din anmälan.' +
       '\n\nHälsningar,\nStora Lundby Scoutkår';
 

@@ -166,8 +166,23 @@ describe('batch', () => {
 describe('submitApplication validation', () => {
   it('rejects a payload missing a required field', () => {
     const payload = validPayload();
+    delete payload.guardianEmail;
+    expect(() => ctx.context.submitApplication(payload)).toThrow(/guardianEmail/);
+  });
+
+  it('rejects a missing scoutName/avdelning when noScoutChild is not set', () => {
+    const payload = validPayload();
     delete payload.scoutName;
-    expect(() => ctx.context.submitApplication(payload)).toThrow(/scoutName/);
+    expect(() => ctx.context.submitApplication(payload)).toThrow(/Scoutens namn/);
+  });
+
+  it('accepts a missing scoutName/avdelning when noScoutChild is true - older members with no enrolled scout', () => {
+    const payload = validPayload();
+    delete payload.scoutName;
+    delete payload.avdelning;
+    payload.noScoutChild = 'true';
+    expect(() => ctx.context.submitApplication(payload)).not.toThrow();
+    expect(applicationRows()[0][applicationsHeaders().indexOf('scoutName')]).toBe('');
   });
 
   it('rejects a payload without consent', () => {

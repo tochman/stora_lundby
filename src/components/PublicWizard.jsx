@@ -29,12 +29,34 @@ function formatActivityWhen(activity) {
   return [datePart, timePart, locationPart].filter(Boolean).join(', ');
 }
 
+// Checked per-step (on "Nästa") and again as a safety net on final submit,
+// so a missing field is caught right where it was left blank instead of
+// only surfacing after all 5 steps are filled in.
+function getStepError(stepNumber, data) {
+  if (stepNumber === 3 && data.selectedActivities.includes('own-suggestion') && !data.ownSuggestionText.trim()) {
+    return 'Beskriv ditt eget förslag innan du går vidare.';
+  }
+  if (stepNumber === 4) {
+    if (!data.guardianName || !data.guardianPhone || !data.guardianEmail) {
+      return 'Namn, telefon och e-post är obligatoriska.';
+    }
+    if (!data.noScoutChild && (!data.scoutName || !data.avdelning)) {
+      return 'Scoutens namn och avdelning är obligatoriska, eller kryssa i att du inte har något barn i scouterna.';
+    }
+  }
+  if (stepNumber === 5 && !data.consent) {
+    return 'Du måste godkänna GDPR-samtycke för att skicka in anmälan.';
+  }
+  return null;
+}
+
 const emptyForm = {
   guardianName: '',
   guardianPhone: '',
   guardianEmail: '',
   scoutName: '',
   avdelning: '',
+  noScoutChild: false,
   selectedActivities: [],
   ownSuggestionText: '',
   comments: '',
@@ -109,10 +131,27 @@ export default function PublicWizard() {
   };
 
   const nextStep = () => {
+    const stepError = getStepError(step, formData);
+    if (stepError) {
+      setError(stepError);
+      return;
+    }
     if (step < steps.length) {
       setStep((current) => current + 1);
       setError('');
     }
+  };
+
+  // Checking this clears any scout name/avdelning already typed - keeps the
+  // submitted data consistent with what's actually shown once the fields
+  // are hidden below, rather than silently carrying stale leftover text.
+  const toggleNoScoutChild = (checked) => {
+    setFormData((prev) => ({
+      ...prev,
+      noScoutChild: checked,
+      scoutName: checked ? '' : prev.scoutName,
+      avdelning: checked ? '' : prev.avdelning
+    }));
   };
 
   const previousStep = () => {
@@ -126,24 +165,15 @@ export default function PublicWizard() {
     event.preventDefault();
     setError('');
 
-    if (!formData.guardianName || !formData.guardianPhone || !formData.guardianEmail) {
-      setError('Namn, telefon och e-post är obligatoriska.');
-      return;
-    }
-
-    if (!formData.scoutName || !formData.avdelning) {
-      setError('Scoutens namn och avdelning är obligatoriska.');
-      return;
-    }
-
-    if (formData.selectedActivities.includes('own-suggestion') && !formData.ownSuggestionText.trim()) {
-      setError('Beskriv ditt eget förslag innan du skickar in anmälan.');
-      return;
-    }
-
-    if (!formData.consent) {
-      setError('Du måste godkänna GDPR-samtycke för att skicka in anmälan.');
-      return;
+    // Re-checks every step's requirements as a safety net (e.g. someone
+    // went back and cleared a field after already passing that step) -
+    // getStepError is the same check nextStep() already ran per-step.
+    for (const stepNumber of [3, 4, 5]) {
+      const stepError = getStepError(stepNumber, formData);
+      if (stepError) {
+        setError(stepError);
+        return;
+      }
     }
 
     setLoading(true);
@@ -198,7 +228,7 @@ export default function PublicWizard() {
 
           <div className="card mt-6 text-left">
             <p className="text-sm font-semibold uppercase tracking-wide text-slate-500">
-              {submitted.scoutName} · {submitted.avdelning}
+              {submitted.scoutName ? `${submitted.scoutName} · ${submitted.avdelning}` : 'Medlem utan barn i scouterna'}
             </p>
 
             {submitted.selectedActivities.length === 0 ? (
@@ -372,21 +402,32 @@ export default function PublicWizard() {
               </div>
 
               <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är förälder till följande scout</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="scoutName">Namn</label>
-                  <input id="scoutName" type="text" value={formData.scoutName} onChange={(e) => updateField('scoutName', e.target.value)} className="input" />
+              <label className="flex items-start gap-3 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  checked={formData.noScoutChild}
+                  onChange={(e) => toggleNoScoutChild(e.target.checked)}
+                  className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                />
+                <span>Jag har inget barn i scouterna (t.ex. du är själv aktiv medlem, rover eller sitter i styrelsen)</span>
+              </label>
+              {!formData.noScoutChild && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div>
+                    <label className="label" htmlFor="scoutName">Namn</label>
+                    <input id="scoutName" type="text" value={formData.scoutName} onChange={(e) => updateField('scoutName', e.target.value)} className="input" />
+                  </div>
+                  <div>
+                    <label className="label" htmlFor="avdelning">Avdelning</label>
+                    <select id="avdelning" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input">
+                      <option value="">Välj avdelning</option>
+                      {AVDELNINGAR.map((avdelning) => (
+                        <option key={avdelning} value={avdelning}>{avdelning}</option>
+                      ))}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="label" htmlFor="avdelning">Avdelning</label>
-                  <select id="avdelning" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input">
-                    <option value="">Välj avdelning</option>
-                    {AVDELNINGAR.map((avdelning) => (
-                      <option key={avdelning} value={avdelning}>{avdelning}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
