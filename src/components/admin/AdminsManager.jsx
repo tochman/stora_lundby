@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
+import ErrorBanner from '../ErrorBanner';
 
 export default function AdminsManager({ idToken, currentEmail }) {
   const [admins, setAdmins] = useState([]);
@@ -63,7 +64,7 @@ export default function AdminsManager({ idToken, currentEmail }) {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={load} />}
 
       <section className="card">
         <h2 className="mb-4 text-xl font-bold text-slate-800">Lägg till admin</h2>

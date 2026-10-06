@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
+import ErrorBanner from '../ErrorBanner';
 
 const CATEGORY_LABELS = {
   gift: 'Lotterigåva',
@@ -250,7 +251,7 @@ export default function ActivitiesManager({ idToken }) {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+      {error && <ErrorBanner message={error} onRetry={load} />}
       {notice && <div className="rounded-lg border border-green-200 bg-green-50 p-4 text-sm text-green-700">{notice}</div>}
 
       <datalist id={LOCATIONS_DATALIST_ID}>

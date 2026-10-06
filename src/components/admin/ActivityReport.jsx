@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
+import ErrorBanner from '../ErrorBanner';
 
 const SWEDISH_MONTHS = [
   'januari', 'februari', 'mars', 'april', 'maj', 'juni',
@@ -24,31 +25,27 @@ export default function ActivityReport({ idToken }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoading(true);
-        const results = await api.batch([
-          { action: 'getActivitiesAdmin', params: { idToken } },
-          { action: 'getApplications', params: { idToken } }
-        ]);
-        if (cancelled) return;
-        const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
-        const apps = unwrapBatchResult(results, 1, 'hämtning av anmälningar');
-        setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
-        setApplications(apps || []);
-        setError('');
-      } catch (err) {
-        if (!cancelled) setError(err.message || 'Kunde inte ladda data.');
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const load = async () => {
+    try {
+      setLoading(true);
+      const results = await api.batch([
+        { action: 'getActivitiesAdmin', params: { idToken } },
+        { action: 'getApplications', params: { idToken } }
+      ]);
+      const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
+      const apps = unwrapBatchResult(results, 1, 'hämtning av anmälningar');
+      setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
+      setApplications(apps || []);
+      setError('');
+    } catch (err) {
+      setError(err.message || 'Kunde inte ladda data.');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     load();
-    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -86,7 +83,7 @@ export default function ActivityReport({ idToken }) {
 
   return (
     <div className="space-y-6">
-      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 print:hidden">{error}</div>}
+      {error && <div className="print:hidden"><ErrorBanner message={error} onRetry={load} /></div>}
 
       <section className="card print:hidden">
         <h2 className="mb-2 text-xl font-bold text-slate-800">Skapa kontaktlista</h2>

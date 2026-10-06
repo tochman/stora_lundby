@@ -3,6 +3,7 @@ import api, { unwrapBatchResult } from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
 import { AVDELNINGAR } from '../utils/constants';
 import LoadingOverlay from './LoadingOverlay';
+import ErrorBanner from './ErrorBanner';
 
 const steps = [1, 2, 3, 4, 5];
 
@@ -51,33 +52,28 @@ export default function PublicWizard() {
   const [submitted, setSubmitted] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-
-    async function load() {
-      try {
-        setLoadingActivities(true);
-        const results = await api.batch([
-          { action: 'getActivities', params: {} },
-          { action: 'getConfig', params: {} }
-        ]);
-        if (cancelled) return;
-        const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
-        const publicConfig = unwrapBatchResult(results, 1, 'hämtning av inställningar');
-        setActivities(activityList);
-        setConfig(publicConfig);
-        setLoadError('');
-      } catch (err) {
-        if (!cancelled) {
-          setLoadError(err.message || 'Kunde inte hämta formuläret. Försök igen senare.');
-        }
-      } finally {
-        if (!cancelled) setLoadingActivities(false);
-      }
+  const loadForm = async () => {
+    try {
+      setLoadingActivities(true);
+      const results = await api.batch([
+        { action: 'getActivities', params: {} },
+        { action: 'getConfig', params: {} }
+      ]);
+      const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
+      const publicConfig = unwrapBatchResult(results, 1, 'hämtning av inställningar');
+      setActivities(activityList);
+      setConfig(publicConfig);
+      setLoadError('');
+    } catch (err) {
+      setLoadError(err.message || 'Kunde inte hämta formuläret. Försök igen senare.');
+    } finally {
+      setLoadingActivities(false);
     }
+  };
 
-    load();
-    return () => { cancelled = true; };
+  useEffect(() => {
+    loadForm();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // A gift pledge is a different kind of commitment from working a shift -
@@ -183,7 +179,9 @@ export default function PublicWizard() {
   if (loadError) {
     return (
       <PublicLayout>
-        <div className="mx-auto max-w-3xl rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{loadError}</div>
+        <div className="mx-auto max-w-3xl">
+          <ErrorBanner message={loadError} onRetry={loadForm} />
+        </div>
       </PublicLayout>
     );
   }

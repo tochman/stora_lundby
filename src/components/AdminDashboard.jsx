@@ -16,6 +16,7 @@ import ManualEntryForm from './admin/ManualEntryForm';
 import DataRetention from './admin/DataRetention';
 import ActivityReport from './admin/ActivityReport';
 import LoadingOverlay from './LoadingOverlay';
+import ErrorBanner from './ErrorBanner';
 
 const statusOptions = ['Ny', 'Behandlas', 'Godkänd', 'Avslutad'];
 const views = [
@@ -202,9 +203,7 @@ export default function AdminDashboard() {
           ))}
         </nav>
 
-        {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
-        )}
+        {error && <ErrorBanner message={error} onRetry={() => loadDashboard(idToken)} />}
 
         {view === 'activities' && <ActivitiesManager idToken={idToken} />}
         {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}
