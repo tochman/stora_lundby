@@ -9,6 +9,7 @@ import {
   storeIdToken
 } from '../utils/googleAuth';
 import { buildActivityRosterCsv, downloadCsv } from '../utils/csv';
+import { collectTermOptions, termKey, termLabel } from '../utils/terms';
 import { AdminLayout } from './Layout';
 import ActivitiesManager from './admin/ActivitiesManager';
 import AdminsManager from './admin/AdminsManager';
@@ -82,7 +83,7 @@ export default function AdminDashboard() {
   const [applications, setApplications] = useState([]);
   const [summary, setSummary] = useState(null);
   const [activities, setActivities] = useState([]);
-  const [filter, setFilter] = useState({ status: 'all', activity: 'all', search: '' });
+  const [filter, setFilter] = useState({ status: 'all', activity: 'all', search: '', term: 'all' });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [notesDraft, setNotesDraft] = useState({});
@@ -142,9 +143,12 @@ export default function AdminDashboard() {
   // a full reload.
   const liveNewCount = applications.filter((app) => String(app.status).toLowerCase() === 'ny').length;
 
+  const termOptions = collectTermOptions(applications);
+
   const filtered = applications.filter((app) => {
     if (filter.status !== 'all' && app.status !== filter.status) return false;
     if (filter.activity !== 'all' && !(app.selectedActivities || []).includes(filter.activity)) return false;
+    if (filter.term !== 'all' && termKey(app.year, app.term) !== filter.term) return false;
     if (filter.search) {
       const haystack = `${app.guardianName} ${app.guardianEmail} ${app.scoutName}`.toLowerCase();
       if (!haystack.includes(filter.search.toLowerCase())) return false;
@@ -294,6 +298,16 @@ export default function AdminDashboard() {
                 onChange={(e) => setFilter((prev) => ({ ...prev, search: e.target.value }))}
                 className="input w-auto"
               />
+              <select
+                value={filter.term}
+                onChange={(e) => setFilter((prev) => ({ ...prev, term: e.target.value }))}
+                className="input w-auto"
+              >
+                <option value="all">Alla terminer</option>
+                {termOptions.map(({ year, term }) => (
+                  <option key={termKey(year, term)} value={termKey(year, term)}>{termLabel(year, term)}</option>
+                ))}
+              </select>
               <select
                 value={filter.status}
                 onChange={(e) => setFilter((prev) => ({ ...prev, status: e.target.value }))}

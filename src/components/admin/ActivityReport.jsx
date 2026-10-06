@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 import ErrorBanner from '../ErrorBanner';
+import { collectTermOptions, termKey, termLabel } from '../../utils/terms';
 
 const SWEDISH_MONTHS = [
   'januari', 'februari', 'mars', 'april', 'maj', 'juni',
@@ -22,6 +23,7 @@ export default function ActivityReport({ idToken }) {
   const [activities, setActivities] = useState([]);
   const [applications, setApplications] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
+  const [termFilter, setTermFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
@@ -54,6 +56,16 @@ export default function ActivityReport({ idToken }) {
   const toggleActivity = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
+
+  const termOptions = useMemo(() => collectTermOptions(activities), [activities]);
+
+  // Standing roles aren't tied to a single term (they're perpetual), so a
+  // term filter leaves them visible regardless of which term is selected -
+  // filtering them out would just hide them from every term-scoped view.
+  const visibleActivities = useMemo(() => {
+    if (termFilter === 'all') return activities;
+    return activities.filter((a) => (!a.year && !a.term) || termKey(a.year, a.term) === termFilter);
+  }, [activities, termFilter]);
 
   const selectedActivities = useMemo(
     () => activities.filter((a) => selectedIds.includes(a.id)),
@@ -96,13 +108,21 @@ export default function ActivityReport({ idToken }) {
       {error && <div className="print:hidden"><ErrorBanner message={error} onRetry={load} /></div>}
 
       <section className="card print:hidden">
-        <h2 className="mb-2 text-xl font-bold text-slate-800">Skapa kontaktlista</h2>
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-3">
+          <h2 className="text-xl font-bold text-slate-800">Skapa kontaktlista</h2>
+          <select value={termFilter} onChange={(e) => setTermFilter(e.target.value)} className="input w-auto">
+            <option value="all">Alla terminer</option>
+            {termOptions.map(({ year, term }) => (
+              <option key={termKey(year, term)} value={termKey(year, term)}>{termLabel(year, term)}</option>
+            ))}
+          </select>
+        </div>
         <p className="mb-4 text-sm text-slate-500">
           Välj en eller flera aktiviteter. Förhandsgranskningen nedan visar exakt vad som skrivs ut -
           klicka sedan på "Skriv ut / Spara som PDF" och välj "Spara som PDF" i skrivardialogen.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
-          {activities.map((activity) => (
+          {visibleActivities.map((activity) => (
             <label key={activity.id} className="flex items-start gap-2 rounded-lg border border-slate-200 p-2 text-sm">
               <input
                 type="checkbox"
