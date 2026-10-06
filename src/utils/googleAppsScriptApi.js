@@ -217,11 +217,17 @@ async function mockAction(action, params) {
 // gets a fresh server-generated id each call) and copyActivities - each of
 // those can create a genuine duplicate if the first attempt actually
 // succeeded and only the response was lost.
+// 'batch' is included too - every call site in this app only ever bundles
+// actions already on this list (see the load() functions in
+// AdminDashboard/ActivitiesManager/DataRetention/ActivityReport), so
+// retrying a failed batch as a whole is exactly as safe as retrying each of
+// its parts individually. If a future caller ever batches a non-idempotent
+// write alongside these, 'batch' would need to come back off this list.
 const RETRY_SAFE_ACTIONS = new Set([
   'getActivities', 'getActivitiesAdmin', 'getConfig', 'getApplications',
   'getAdminSummary', 'getConsentLog', 'getAdmins', 'getPurgeLog',
   'submitApplication', 'updateApplicationStatus', 'updateApplicationNotes',
-  'setAdminActive', 'addAdmin', 'purgeTermData'
+  'setAdminActive', 'addAdmin', 'purgeTermData', 'batch'
 ]);
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 800;
