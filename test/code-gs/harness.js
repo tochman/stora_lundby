@@ -97,6 +97,7 @@ export function createCodeGsContext() {
   // Mutable so tests can simulate signing in as a different Google account
   // before calling requireAdmin/verifyGoogleIdToken.
   const tokenInfo = { email: 'admin@storalundby.se', email_verified: 'true', aud: 'test-client' };
+  const urlFetchCalls = { count: 0 };
 
   const context = {
     console,
@@ -135,10 +136,13 @@ export function createCodeGsContext() {
       sendEmail: (options) => sentEmails.push(options)
     },
     UrlFetchApp: {
-      fetch: () => ({
-        getResponseCode: () => 200,
-        getContentText: () => JSON.stringify(tokenInfo)
-      })
+      fetch: () => {
+        urlFetchCalls.count += 1;
+        return {
+          getResponseCode: () => 200,
+          getContentText: () => JSON.stringify(tokenInfo)
+        };
+      }
     },
     Logger: { log: () => {} },
     CacheService: {
@@ -161,5 +165,5 @@ export function createCodeGsContext() {
   // with *this* context's Date constructor, not the host realm's.
   context.__makeDate = vm.runInContext('(function (iso) { return new Date(iso); })', context);
 
-  return { context, spreadsheet, sentEmails, tokenInfo };
+  return { context, spreadsheet, sentEmails, tokenInfo, urlFetchCalls };
 }

@@ -77,11 +77,89 @@ describe('requireAdmin', () => {
   it('respects a custom adminEmailDomain config value', () => {
     ctx.context.setConfigValue('adminEmailDomain', 'otherdomain.se');
     ctx.spreadsheet.getSheetByName('Admins').appendRow(['admin@otherdomain.se', 'admin', 'TRUE']);
+
+    // Distinct tokens, as two different signed-in users would actually
+    // have - verifyGoogleIdToken memoizes per token string, so reusing one
+    // literal token for both would just replay the first lookup's result.
     ctx.tokenInfo.email = 'admin@otherdomain.se';
-    expect(ctx.context.requireAdmin({ idToken: 'token' })).toBe('admin@otherdomain.se');
+    expect(ctx.context.requireAdmin({ idToken: 'token-a' })).toBe('admin@otherdomain.se');
 
     ctx.tokenInfo.email = 'admin@storalundby.se';
-    expect(() => ctx.context.requireAdmin({ idToken: 'token' })).toThrow(/åtkomst nekad/i);
+    expect(() => ctx.context.requireAdmin({ idToken: 'token-b' })).toThrow(/åtkomst nekad/i);
+  });
+});
+
+describe('verifyGoogleIdToken memoization', () => {
+  beforeEach(() => {
+    ctx.spreadsheet.getSheetByName('Admins').appendRow(['admin@storalundby.se', 'admin', 'TRUE']);
+  });
+
+  it('only calls out to Google once for repeated checks of the same token', () => {
+    ctx.context.verifyGoogleIdToken('token-a');
+    ctx.context.verifyGoogleIdToken('token-a');
+    ctx.context.verifyGoogleIdToken('token-a');
+    expect(ctx.urlFetchCalls.count).toBe(1);
+  });
+
+  it('still verifies separately for a different token', () => {
+    ctx.context.verifyGoogleIdToken('token-a');
+    ctx.context.verifyGoogleIdToken('token-b');
+    expect(ctx.urlFetchCalls.count).toBe(2);
+  });
+
+  it('a batch of admin actions sharing one token verifies it only once', () => {
+    ctx.context.requireAdmin({ idToken: 'shared-token' });
+    ctx.context.requireAdmin({ idToken: 'shared-token' });
+    ctx.context.requireAdmin({ idToken: 'shared-token' });
+    expect(ctx.urlFetchCalls.count).toBe(1);
+  });
+});
+
+describe('batch', () => {
+  beforeEach(() => {
+    ctx.spreadsheet.getSheetByName('Admins').appendRow(['admin@storalundby.se', 'admin', 'TRUE']);
+    ctx.tokenInfo.email = 'admin@storalundby.se';
+  });
+
+  it('runs several actions and returns one ok/data or ok/error result per request, in order', () => {
+    const results = ctx.context.handleAction('batch', {
+      requests: [
+        { action: 'getConfig' },
+        { action: 'getApplications', params: { idToken: 'token' } },
+        { action: 'thisActionDoesNotExist' }
+      ]
+    });
+
+    expect(results).toHaveLength(3);
+    expect(results[0].ok).toBe(true);
+    expect(results[0].data.currentTerm).toBe('Höst');
+    expect(results[1].ok).toBe(true);
+    expect(results[1].data).toEqual([]);
+    expect(results[2].ok).toBe(false);
+    expect(results[2].error).toMatch(/okänd åtgärd/i);
+  });
+
+  it('only verifies the shared token once across multiple admin actions in the batch', () => {
+    ctx.context.handleAction('batch', {
+      requests: [
+        { action: 'getApplications', params: { idToken: 'shared-token' } },
+        { action: 'getAdminSummary', params: { idToken: 'shared-token' } },
+        { action: 'getActivitiesAdmin', params: { idToken: 'shared-token' } }
+      ]
+    });
+    expect(ctx.urlFetchCalls.count).toBe(1);
+  });
+
+  it("one failing request in a batch doesn't affect the others", () => {
+    const results = ctx.context.handleAction('batch', {
+      requests: [
+        { action: 'getApplications', params: {} }, // missing idToken - should fail
+        { action: 'getConfig' }
+      ]
+    });
+    expect(results[0].ok).toBe(false);
+    expect(results[0].error).toMatch(/inloggning krävs/i);
+    expect(results[1].ok).toBe(true);
   });
 });
 

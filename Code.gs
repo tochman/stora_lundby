@@ -71,6 +71,19 @@ function jsonResponse(obj) {
 
 function handleAction(action, params) {
   switch (action) {
+    case 'batch':
+      // Bundles several related calls (e.g. a dashboard's reads) into one
+      // round trip and one Apps Script execution - each sub-request still
+      // goes through its own case/requireAdmin check below, but repeated
+      // token verifications within the batch are memoized (see
+      // verifyGoogleIdToken), so this isn't N times the auth overhead.
+      return (params.requests || []).map(function (request) {
+        try {
+          return { ok: true, data: handleAction(request.action, request.params || {}) };
+        } catch (err) {
+          return { ok: false, error: err.message || String(err) };
+        }
+      });
     case 'getActivities':
       return getActivities(params.year, params.term);
     case 'getConfig':
@@ -156,7 +169,19 @@ function requireAdmin(params) {
   return email;
 }
 
+// Verifying a token means an outbound call from Apps Script to Google's own
+// OAuth servers - real latency on top of everything else. A single page
+// load commonly checks the same token 2-3 times (once per batched action);
+// memoizing per-execution (this var resets on every fresh invocation, so
+// nothing persists between requests) cuts that to one verification no
+// matter how many admin-only actions run in the same call.
+var tokenVerificationCache = {};
+
 function verifyGoogleIdToken(idToken) {
+  if (Object.prototype.hasOwnProperty.call(tokenVerificationCache, idToken)) {
+    return tokenVerificationCache[idToken];
+  }
+
   var response = UrlFetchApp.fetch(
     'https://oauth2.googleapis.com/tokeninfo?id_token=' + encodeURIComponent(idToken),
     { muteHttpExceptions: true }
@@ -172,6 +197,8 @@ function verifyGoogleIdToken(idToken) {
   if (payload.email_verified !== 'true' && payload.email_verified !== true) {
     throw new Error('E-postadressen är inte verifierad.');
   }
+
+  tokenVerificationCache[idToken] = payload.email;
   return payload.email;
 }
 

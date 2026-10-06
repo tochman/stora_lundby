@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import api from '../../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 
 export default function DataRetention({ idToken }) {
@@ -17,11 +17,14 @@ export default function DataRetention({ idToken }) {
   const load = async () => {
     try {
       setLoading(true);
-      const [publicConfig, apps, log] = await Promise.all([
-        api.getConfig(),
-        api.getApplications(idToken),
-        api.getPurgeLog(idToken)
+      const results = await api.batch([
+        { action: 'getConfig', params: {} },
+        { action: 'getApplications', params: { idToken } },
+        { action: 'getPurgeLog', params: { idToken } }
       ]);
+      const publicConfig = unwrapBatchResult(results, 0, 'hämtning av inställningar');
+      const apps = unwrapBatchResult(results, 1, 'hämtning av anmälningar');
+      const log = unwrapBatchResult(results, 2, 'hämtning av gallringshistorik');
       setConfig(publicConfig);
       setRetentionDraft(publicConfig.retentionPeriodMonths || '24');
       setApplications(apps || []);

@@ -191,19 +191,46 @@ async function mockAction(action, params) {
     case 'updateConfig':
       Object.assign(mockConfig, params.updates || {});
       return { ...mockConfig };
+    case 'batch': {
+      const results = [];
+      for (const request of params.requests || []) {
+        try {
+          // eslint-disable-next-line no-await-in-loop
+          const data = await mockAction(request.action, request.params || {});
+          results.push({ ok: true, data });
+        } catch (err) {
+          results.push({ ok: false, error: err.message });
+        }
+      }
+      return results;
+    }
     default:
       throw new Error(`Okänd åtgärd (demoläge): ${action}`);
   }
 }
 
-async function callAppsScript(action, params = {}) {
-  if (!APPS_SCRIPT_URL) {
-    if (import.meta.env.DEV) {
-      return mockAction(action, params);
-    }
-    throw new Error('VITE_APPS_SCRIPT_URL är inte konfigurerad.');
-  }
+// Actions safe to silently retry on a transient failure (timeout, 404,
+// network blip): plain reads, plus writes whose effect is naturally
+// idempotent (upsert/set-style, or already keyed so a duplicate attempt
+// just overwrites the same record). Deliberately excludes
+// createManualApplication, upsertActivity (a brand-new activity with no id
+// gets a fresh server-generated id each call) and copyActivities - each of
+// those can create a genuine duplicate if the first attempt actually
+// succeeded and only the response was lost.
+const RETRY_SAFE_ACTIONS = new Set([
+  'getActivities', 'getActivitiesAdmin', 'getConfig', 'getApplications',
+  'getAdminSummary', 'getConsentLog', 'getAdmins', 'getPurgeLog',
+  'submitApplication', 'updateApplicationStatus', 'updateApplicationNotes',
+  'setAdminActive', 'addAdmin', 'purgeTermData'
+]);
+const RETRY_ATTEMPTS = 2;
+const RETRY_DELAY_MS = 800;
 
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function callAppsScriptOnce(action, params) {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
 
@@ -235,7 +262,52 @@ async function callAppsScript(action, params = {}) {
   return result.data;
 }
 
+async function callAppsScript(action, params = {}) {
+  if (!APPS_SCRIPT_URL) {
+    if (import.meta.env.DEV) {
+      return mockAction(action, params);
+    }
+    throw new Error('VITE_APPS_SCRIPT_URL är inte konfigurerad.');
+  }
+
+  const retriesAllowed = RETRY_SAFE_ACTIONS.has(action) ? RETRY_ATTEMPTS : 0;
+  let lastError;
+  for (let attempt = 0; attempt <= retriesAllowed; attempt += 1) {
+    try {
+      // eslint-disable-next-line no-await-in-loop
+      return await callAppsScriptOnce(action, params);
+    } catch (err) {
+      lastError = err;
+      if (attempt < retriesAllowed) {
+        // eslint-disable-next-line no-await-in-loop
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+      }
+    }
+  }
+  throw lastError;
+}
+
+// Bundles several related calls into one request/one Apps Script
+// execution instead of N separate round trips - meaningfully cuts both
+// latency (each round trip carries real fixed overhead) and the number of
+// chances for a transient failure. Returns one {ok, data|error} entry per
+// request, in order; unwrapBatchResult() below turns one entry back into
+// the normal "return data or throw" shape each api.* call already has.
+function callBatch(requests) {
+  return callAppsScript('batch', { requests });
+}
+
+export function unwrapBatchResult(results, index, label) {
+  const entry = results[index];
+  if (!entry || !entry.ok) {
+    throw new Error((entry && entry.error) || `Fel vid ${label}.`);
+  }
+  return entry.data;
+}
+
 export const api = {
+  batch: callBatch,
+
   getActivities: (year, term) => callAppsScript('getActivities', { year, term }),
   getConfig: () => callAppsScript('getConfig'),
   submitApplication: (payload) => callAppsScript('submitApplication', { payload }),

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api from '../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
 import { AVDELNINGAR } from '../utils/constants';
 import LoadingOverlay from './LoadingOverlay';
@@ -57,8 +57,13 @@ export default function PublicWizard() {
     async function load() {
       try {
         setLoadingActivities(true);
-        const [activityList, publicConfig] = await Promise.all([api.getActivities(), api.getConfig()]);
+        const results = await api.batch([
+          { action: 'getActivities', params: {} },
+          { action: 'getConfig', params: {} }
+        ]);
         if (cancelled) return;
+        const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
+        const publicConfig = unwrapBatchResult(results, 1, 'hämtning av inställningar');
         setActivities(activityList);
         setConfig(publicConfig);
         setLoadError('');

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api from '../../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 
 const SWEDISH_MONTHS = [
@@ -30,11 +30,13 @@ export default function ActivityReport({ idToken }) {
     async function load() {
       try {
         setLoading(true);
-        const [activityList, apps] = await Promise.all([
-          api.getActivitiesAdmin(idToken),
-          api.getApplications(idToken)
+        const results = await api.batch([
+          { action: 'getActivitiesAdmin', params: { idToken } },
+          { action: 'getApplications', params: { idToken } }
         ]);
         if (cancelled) return;
+        const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
+        const apps = unwrapBatchResult(results, 1, 'hämtning av anmälningar');
         setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
         setApplications(apps || []);
         setError('');

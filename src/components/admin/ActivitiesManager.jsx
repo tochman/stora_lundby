@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import api from '../../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 
 const CATEGORY_LABELS = {
@@ -126,10 +126,12 @@ export default function ActivitiesManager({ idToken }) {
   const load = async () => {
     try {
       setLoading(true);
-      const [activityList, publicConfig] = await Promise.all([
-        api.getActivitiesAdmin(idToken),
-        api.getConfig()
+      const results = await api.batch([
+        { action: 'getActivitiesAdmin', params: { idToken } },
+        { action: 'getConfig', params: {} }
       ]);
+      const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
+      const publicConfig = unwrapBatchResult(results, 1, 'hämtning av inställningar');
       setActivities(activityList.sort((a, b) => a.sortOrder - b.sortOrder));
       setConfig(publicConfig);
       setConfigDraft(publicConfig);

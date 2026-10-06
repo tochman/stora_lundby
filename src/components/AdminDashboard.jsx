@@ -1,5 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import api from '../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../utils/googleAppsScriptApi';
 import {
   decodeJwt,
   getStoredIdToken,
@@ -64,9 +64,9 @@ function SignInScreen({ error }) {
   return (
     <AdminLayout>
       <div className="card mx-auto max-w-md text-center">
-        <h2 className="mb-2 text-xl font-bold text-slate-800">Logga in som admin</h2>
+        <h2 className="mb-2 text-xl font-bold text-slate-800">Logga in som administratör</h2>
         <p className="mb-6 text-sm text-slate-600">
-          Endast e-postadresser som finns i Admins-fliken i kalkylarket kan se anmälningarna.
+          Obs! Endast @storalundby.se adresser.
         </p>
         <div ref={buttonRef} className="flex justify-center" />
         {setupError && <p className="mt-4 text-sm text-red-700">{setupError}</p>}
@@ -94,11 +94,14 @@ export default function AdminDashboard() {
   const loadDashboard = async (token) => {
     try {
       setLoading(true);
-      const [apps, summaryData, activityList] = await Promise.all([
-        api.getApplications(token),
-        api.getAdminSummary(token),
-        api.getActivities()
+      const results = await api.batch([
+        { action: 'getApplications', params: { idToken: token } },
+        { action: 'getAdminSummary', params: { idToken: token } },
+        { action: 'getActivities', params: {} }
       ]);
+      const apps = unwrapBatchResult(results, 0, 'hämtning av anmälningar');
+      const summaryData = unwrapBatchResult(results, 1, 'hämtning av sammanfattning');
+      const activityList = unwrapBatchResult(results, 2, 'hämtning av aktiviteter');
       setApplications(apps || []);
       setSummary(summaryData);
       setActivities(activityList || []);
