@@ -12,6 +12,12 @@ const PATIENCE_MESSAGES = [
   '..men långsamt...',
 ];
 const MESSAGE_INTERVAL_MS = 3000;
+// Cycles through the message list on repeat rather than stopping after one
+// pass - with 5 messages at 3s apart that's 15s of coverage, leaving the
+// overlay looking frozen for the remaining ~10s before the backend's 25s
+// request timeout. 8 ticks (24s) keeps something visibly changing right up
+// to just before that timeout fires.
+const MESSAGE_TICKS = 8;
 
 // A greyed-out, full-screen overlay with the troop's logo pulsing in the
 // center, shown while waiting on the backend. Used instead of a plain
@@ -22,8 +28,8 @@ export default function LoadingOverlay({ label = 'Laddar...' }) {
 
   useEffect(() => {
     setMessageIndex(-1);
-    const timers = PATIENCE_MESSAGES.map((_, i) =>
-      setTimeout(() => setMessageIndex(i), MESSAGE_INTERVAL_MS * (i + 1))
+    const timers = Array.from({ length: MESSAGE_TICKS }, (_, i) =>
+      setTimeout(() => setMessageIndex(i % PATIENCE_MESSAGES.length), MESSAGE_INTERVAL_MS * (i + 1))
     );
     return () => timers.forEach(clearTimeout);
   }, [label]);

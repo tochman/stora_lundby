@@ -88,6 +88,12 @@ export default function AdminDashboard() {
   const [notesDraft, setNotesDraft] = useState({});
   const [expandedId, setExpandedId] = useState(null);
   const [view, setView] = useState('applications');
+  // Each tab's content stays mounted once visited instead of unmounting on
+  // tab switch (see the render below) - otherwise every single visit to a
+  // tab re-triggers that screen's own full load + full-screen LoadingOverlay,
+  // even if you were just there a moment ago. Only the first visit per tab
+  // actually loads; switching back and forth after that is instant.
+  const [visitedViews, setVisitedViews] = useState(() => new Set(['applications']));
   const [showManualEntry, setShowManualEntry] = useState(false);
 
   const profile = useMemo(() => (idToken ? decodeJwt(idToken) : null), [idToken]);
@@ -193,7 +199,10 @@ export default function AdminDashboard() {
             <button
               key={v.id}
               type="button"
-              onClick={() => setView(v.id)}
+              onClick={() => {
+                setView(v.id);
+                setVisitedViews((prev) => (prev.has(v.id) ? prev : new Set(prev).add(v.id)));
+              }}
               className={`px-4 py-2 text-sm font-semibold ${
                 view === v.id ? 'border-b-2 border-brand-500 text-brand-600' : 'text-slate-500 hover:text-slate-700'
               }`}
@@ -212,10 +221,26 @@ export default function AdminDashboard() {
             screen is broken" when it wasn't. */}
         {view === 'applications' && error && <ErrorBanner message={error} onRetry={() => loadDashboard(idToken)} />}
 
-        {view === 'activities' && <ActivitiesManager idToken={idToken} />}
-        {view === 'admins' && <AdminsManager idToken={idToken} currentEmail={profile?.email} />}
-        {view === 'retention' && <DataRetention idToken={idToken} />}
-        {view === 'reports' && <ActivityReport idToken={idToken} />}
+        {visitedViews.has('activities') && (
+          <div style={{ display: view === 'activities' ? 'block' : 'none' }}>
+            <ActivitiesManager idToken={idToken} />
+          </div>
+        )}
+        {visitedViews.has('admins') && (
+          <div style={{ display: view === 'admins' ? 'block' : 'none' }}>
+            <AdminsManager idToken={idToken} currentEmail={profile?.email} />
+          </div>
+        )}
+        {visitedViews.has('retention') && (
+          <div style={{ display: view === 'retention' ? 'block' : 'none' }}>
+            <DataRetention idToken={idToken} />
+          </div>
+        )}
+        {visitedViews.has('reports') && (
+          <div style={{ display: view === 'reports' ? 'block' : 'none' }}>
+            <ActivityReport idToken={idToken} />
+          </div>
+        )}
 
         {view === 'applications' && summary && (
           <section className="grid gap-4 md:grid-cols-4">
