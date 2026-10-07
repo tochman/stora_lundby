@@ -231,13 +231,22 @@ function isAdmin(userEmail) {
 // Setup / sheet plumbing
 // ---------------------------------------------------------------------------
 
+// Bump this whenever SHEET_NAMES (or a seeded sheet's required header row)
+// changes. The cache key below includes it, so a schema change is always a
+// cache miss on the very next request after deploying - without this, a
+// sheet added in code wouldn't actually get created on an already-warm
+// deployment until the old cache entry expired up to 6 hours later (see
+// the "Sheet ... could not be found" incident when PaperForms was added).
+var PROJECT_SCHEMA_VERSION = 2;
+
 function initializeProject() {
   // Every request calls this, but the sheets only ever need creating once.
   // Skip the repeated getSheetByName/getLastRow checks (each a Spreadsheet
   // service round trip) for 6 hours after the last successful run - this
   // is the single biggest latency cost on every call otherwise.
   var cache = CacheService.getScriptCache();
-  if (cache.get('projectInitialized') === 'true') {
+  var cacheKey = 'projectInitialized_v' + PROJECT_SCHEMA_VERSION;
+  if (cache.get(cacheKey) === 'true') {
     return;
   }
 
@@ -310,7 +319,7 @@ function initializeProject() {
     paperFormsSheet.appendRow(['year', 'term', 'docId', 'docUrl', 'createdAt', 'createdBy']);
   }
 
-  cache.put('projectInitialized', 'true', 21600);
+  cache.put(cacheKey, 'true', 21600);
 }
 
 function getSpreadsheet() {
