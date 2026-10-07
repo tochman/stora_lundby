@@ -147,7 +147,10 @@ Detta är det steg som brukar kännas mest omständligt - här är det i detalj:
 - I Apps Script-redigeraren: "Distribuera" (uppe till höger) → "Ny distribution".
 - Typ: **Web app**.
 - "Kör som": ditt konto (den identitet Apps Script faktiskt kör serversidans kod som - den har inget med
-  vem som är inloggad i admin-panelen att göra).
+  vem som är inloggad i admin-panelen att göra). Detta är också avsändaradressen på bekräftelsemailet
+  `submitApplication` skickar (`MailApp.sendEmail` i `Code.gs` - den skickar alltid som det här kontot,
+  det finns inget separat "från"-fält) - distribuera med det Google-konto ni vill att föräldrarna ska se
+  som avsändare, t.ex. en kårmail snarare än en privat adress, om ni har ett sådant konto tillgängligt.
 - "Vem har åtkomst": **Alla** (appen autentiserar admin själv via ID-token i `requireAdmin`, inte via Apps
   Scripts egen inloggningsmur - "Alla" krävs för att det publika formuläret ska kunna skicka in svar utan
   att varje förälder behöver ett Google-konto).
