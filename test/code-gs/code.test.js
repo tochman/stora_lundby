@@ -143,7 +143,7 @@ describe('batch', () => {
     ctx.context.handleAction('batch', {
       requests: [
         { action: 'getApplications', params: { idToken: 'shared-token' } },
-        { action: 'getAdminSummary', params: { idToken: 'shared-token' } },
+        { action: 'getPurgeLog', params: { idToken: 'shared-token' } },
         { action: 'getActivitiesAdmin', params: { idToken: 'shared-token' } }
       ]
     });

@@ -38,9 +38,7 @@ npm run dev
 Appen körs på `http://localhost:5173` (publikt formulär) och `http://localhost:5173/admin.html`
 (admin-dashboard).
 
-Utan en `.env`-fil körs klienten i **demoläge**: den använder data i minnet istället för att anropa en
-riktig backend, så du kan jobba med UI:t utan att ha satt upp Apps Script än. Så fort
-`VITE_APPS_SCRIPT_URL` är satt (se nedan) pratar klienten med den riktiga backend-en, även i dev.
+Klienten behöver en riktig backend även i dev: sätt `VITE_APPS_SCRIPT_URL` i `.env` (se nedan).
 
 ## Sätta upp backend (Google Apps Script)
 

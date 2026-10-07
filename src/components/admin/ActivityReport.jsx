@@ -3,21 +3,7 @@ import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 import ErrorBanner from '../ErrorBanner';
 import { collectTermOptions, termKey, termLabel } from '../../utils/terms';
-
-const SWEDISH_MONTHS = [
-  'januari', 'februari', 'mars', 'april', 'maj', 'juni',
-  'juli', 'augusti', 'september', 'oktober', 'november', 'december'
-];
-
-function formatActivityWhen(activity) {
-  let datePart = '';
-  if (activity.date) {
-    const [year, month, day] = String(activity.date).split('T')[0].split('-').map(Number);
-    if (year && month && day) datePart = `${day} ${SWEDISH_MONTHS[month - 1]}`;
-  }
-  const timePart = activity.startTime && activity.endTime ? `kl ${activity.startTime}-${activity.endTime}` : '';
-  return [datePart, timePart, activity.location].filter(Boolean).join(', ');
-}
+import { formatActivityWhen } from '../../utils/dates';
 
 export default function ActivityReport({ idToken }) {
   const [activities, setActivities] = useState([]);

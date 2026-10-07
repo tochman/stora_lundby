@@ -2,32 +2,11 @@ import { useEffect, useMemo, useState } from 'react';
 import api, { unwrapBatchResult } from '../utils/googleAppsScriptApi';
 import { PublicLayout } from './Layout';
 import { AVDELNINGAR } from '../utils/constants';
+import { formatActivityDate, formatActivityWhen } from '../utils/dates';
 import LoadingOverlay from './LoadingOverlay';
 import ErrorBanner from './ErrorBanner';
 
 const steps = [1, 2, 3, 4, 5];
-
-const SWEDISH_MONTHS = [
-  'januari', 'februari', 'mars', 'april', 'maj', 'juni',
-  'juli', 'augusti', 'september', 'oktober', 'november', 'december'
-];
-
-function formatActivityDate(isoDate) {
-  if (!isoDate) return '';
-  // Tolerates a full ISO datetime (e.g. if a value ever comes back as a
-  // serialized Date instead of plain yyyy-MM-dd) by only looking at the
-  // date portion before any "T".
-  const [year, month, day] = String(isoDate).split('T')[0].split('-').map(Number);
-  if (!year || !month || !day) return isoDate;
-  return `${day} ${SWEDISH_MONTHS[month - 1]}`;
-}
-
-function formatActivityWhen(activity) {
-  const datePart = formatActivityDate(activity.date);
-  const timePart = activity.startTime && activity.endTime ? `kl ${activity.startTime}-${activity.endTime}` : '';
-  const locationPart = activity.location || '';
-  return [datePart, timePart, locationPart].filter(Boolean).join(', ');
-}
 
 // Checked per-step (on "Nästa") and again as a safety net on final submit,
 // so a missing field is caught right where it was left blank instead of

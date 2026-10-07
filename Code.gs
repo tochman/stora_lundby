@@ -94,9 +94,6 @@ function handleAction(action, params) {
     case 'getApplications':
       requireAdmin(params);
       return getApplications();
-    case 'getAdminSummary':
-      requireAdmin(params);
-      return getAdminSummary();
     case 'updateApplicationStatus':
       requireAdmin(params);
       return updateApplicationStatus(params.id, params.status);
@@ -106,9 +103,6 @@ function handleAction(action, params) {
     case 'createManualApplication':
       requireAdmin(params);
       return createManualApplication(params.payload || params);
-    case 'getConsentLog':
-      requireAdmin(params);
-      return getConsentLogEntries();
     case 'purgeTermData':
       var purgingAdmin = requireAdmin(params);
       return purgeTermData(params.year, params.term, purgingAdmin);
@@ -433,14 +427,13 @@ function getConfigValue(key, defaultValue) {
 function setConfigValue(key, value) {
   var configSheet = getSheetByName(SHEET_NAMES.config);
   var values = configSheet.getDataRange().getValues();
-  for (var i = 1; i < values.length; i += 1) {
-    if (String(values[i][0]).trim().toLowerCase() === String(key).trim().toLowerCase()) {
-      configSheet.getRange(i + 1, 2).setValue(value);
-      CacheService.getScriptCache().remove('publicConfig');
-      return;
-    }
+  var i = 1;
+  while (i < values.length && String(values[i][0]).trim().toLowerCase() !== String(key).trim().toLowerCase()) i += 1;
+  if (i < values.length) {
+    configSheet.getRange(i + 1, 2).setValue(value);
+  } else {
+    configSheet.appendRow([key, value]);
   }
-  configSheet.appendRow([key, value]);
   CacheService.getScriptCache().remove('publicConfig');
 }
 
@@ -840,44 +833,6 @@ function createManualApplication(payload) {
 
   writeApplicationRow(sheet, headers, rowValues, -1);
   return { ok: true };
-}
-
-function getAdminSummary() {
-  var apps = getApplications();
-  var activitiesById = {};
-  getActivitiesRaw().forEach(function (activity) { activitiesById[activity.id] = activity; });
-
-  var summary = {
-    total: apps.length,
-    newCount: apps.filter(function (item) { return String(item.status).toLowerCase() === 'ny'; }).length,
-    attendanceCount: 0,
-    giftCount: 0,
-    standingRoleCount: 0
-  };
-
-  apps.forEach(function (app) {
-    (app.selectedActivities || []).forEach(function (id) {
-      var activity = activitiesById[id];
-      var category = activity ? activity.category : '';
-      if (category === 'gift') {
-        summary.giftCount += 1;
-      } else if (category === 'standing-role') {
-        summary.standingRoleCount += 1;
-      } else {
-        summary.attendanceCount += 1;
-      }
-    });
-  });
-
-  return summary;
-}
-
-// ---------------------------------------------------------------------------
-// Consent log / admins
-// ---------------------------------------------------------------------------
-
-function getConsentLogEntries() {
-  return sheetRowsAsObjects(SHEET_NAMES.consentLog).reverse();
 }
 
 // ---------------------------------------------------------------------------

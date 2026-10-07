@@ -11,10 +11,8 @@ const GSI_SCRIPT_SRC = 'https://accounts.google.com/gsi/client';
 
 export function decodeJwt(token) {
   try {
-    const payloadSegment = token.split('.')[1];
-    const normalized = payloadSegment.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = normalized.padEnd(normalized.length + ((4 - (normalized.length % 4)) % 4), '=');
-    return JSON.parse(atob(padded));
+    // atob accepts unpadded base64, so only the URL-safe alphabet needs mapping.
+    return JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
   } catch (error) {
     return null;
   }
