@@ -410,17 +410,17 @@ describe('paper form (Google Doc)', () => {
 
     const doc = ctx.docs.get(result.docId);
     expect(doc.saved).toBe(true);
-    // listItems mixes two things: the 3 static intro bullets (BULLET) and
-    // the term's actual checklist (HOLLOW_BULLET) - 10 Höst 2026 signup
-    // activities (gift/prep/market-shift/workday/baking) seeded by
+    // Checklist items are plain paragraphs prefixed with a checkbox glyph
+    // (not native list items - see appendCheckboxLine) - 10 Höst 2026
+    // signup activities (gift/prep/market-shift/workday/baking) seeded by
     // DEFAULT_ACTIVITIES, plus the 3 standing roles.
-    const checklistItems = doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET');
-    expect(checklistItems).toHaveLength(13);
+    const checklistLines = doc.body.paragraphs.filter((p) => p.text.startsWith('☐'));
+    expect(checklistLines).toHaveLength(13);
 
-    // Logo and QR live side by side in a borderless header table, not as
-    // standalone body-level images.
-    expect(doc.body.tables).toHaveLength(1);
-    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    // Logo and QR live side by side in a borderless table in the document's
+    // actual header section, so they repeat on every page.
+    expect(doc.header.tables).toHaveLength(1);
+    const [brandCell, qrCell] = doc.header.tables[0].rows[0].cells;
     expect(brandCell.images).toHaveLength(1); // the logo
     expect(qrCell.images).toHaveLength(1); // the QR code
 
@@ -454,10 +454,11 @@ describe('paper form (Google Doc)', () => {
     expect(checklistHeader.textStyle.bold).toBe(true); // headers ARE meant to be bold...
     expect(checklistHeader.textStyle.color).toBe(INK); // ...but never pink - that's only the deadline line
 
-    const checklistItems = doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET');
-    checklistItems.forEach((item) => {
-      expect(item.textStyle.bold).toBe(false);
-      expect(item.textStyle.color).toBe(INK);
+    const checklistLines = doc.body.paragraphs.filter((p) => p.text.startsWith('☐'));
+    expect(checklistLines.length).toBeGreaterThan(0);
+    checklistLines.forEach((line) => {
+      expect(line.textStyle.bold).toBe(false);
+      expect(line.textStyle.color).toBe(INK);
     });
 
     const introBullets = doc.body.listItems.filter((li) => li.glyphType === 'BULLET');
@@ -481,10 +482,27 @@ describe('paper form (Google Doc)', () => {
     // correctly (8.17:1, matching 1030/126).
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const doc = ctx.docs.get(result.docId);
-    const brandCell = doc.body.tables[0].rows[0].cells[0];
+    const brandCell = doc.header.tables[0].rows[0].cells[0];
     expect(brandCell.images).toHaveLength(1);
     const logo = brandCell.images[0];
     expect(logo.width / logo.height).toBeCloseTo(1030 / 126, 1);
+  });
+
+  it('applies 1.5 line spacing throughout, on both pages', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+
+    doc.body.paragraphs.forEach((p) => expect(p.lineSpacing).toBe(1.5));
+    doc.body.listItems.forEach((li) => expect(li.lineSpacing).toBe(1.5));
+  });
+
+  it('marks each activity with a checkbox glyph rather than a bullet or circle, indented like a list would be', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+
+    const checklistLines = doc.body.paragraphs.filter((p) => p.text.startsWith('☐'));
+    expect(checklistLines).toHaveLength(13);
+    checklistLines.forEach((line) => expect(line.indentStart).toBe(36));
   });
 
   it('shares the created doc as view-only for anyone with the link', () => {
@@ -534,10 +552,10 @@ describe('paper form (Google Doc)', () => {
 
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const doc = ctx.docs.get(result.docId);
-    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    const [brandCell, qrCell] = doc.header.tables[0].rows[0].cells;
     expect(brandCell.images).toHaveLength(1); // logo still fetched fine
     expect(qrCell.images).toHaveLength(0); // QR fetch failed - no image, no crash
-    expect(doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET')).toHaveLength(13);
+    expect(doc.body.paragraphs.filter((p) => p.text.startsWith('☐'))).toHaveLength(13);
   });
 
   it('still creates the doc if the logo fetch fails - the bold org name text carries on its own', () => {
@@ -553,7 +571,7 @@ describe('paper form (Google Doc)', () => {
 
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const doc = ctx.docs.get(result.docId);
-    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    const [brandCell, qrCell] = doc.header.tables[0].rows[0].cells;
     expect(brandCell.images).toHaveLength(0); // logo fetch failed - no image, no crash
     expect(qrCell.images).toHaveLength(1);
   });

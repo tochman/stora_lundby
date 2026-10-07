@@ -1069,7 +1069,10 @@ function generatePaperForm(year, term, createdBy) {
 
   var doc = DocumentApp.create('Föräldralapp ' + term + ' ' + year);
   var body = doc.getBody();
-  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(56).setMarginRight(56);
+  // Smaller top margin than before - the header section below now reserves
+  // its own space above this on every page, so the old 40pt body margin on
+  // top of that left an oversized gap before the actual letter started.
+  body.setMarginTop(24).setMarginBottom(40).setMarginLeft(56).setMarginRight(56);
 
   // Google Docs carries a paragraph's trailing text style forward as the
   // starting style for whatever gets appended next (like continuing to type
@@ -1079,10 +1082,13 @@ function generatePaperForm(year, term, createdBy) {
   // past version here only ever turned bold/pink ON (for section headers
   // and the deadline line) and never back OFF, so both silently carried
   // through every single thing that came after them for the rest of the
-  // page.
+  // page. setLineSpacing(1.5) is applied the same way, uniformly, matching
+  // the 1.5 line height Thomas set by hand on page 1 of an earlier draft.
   var ACCENT_PINK = '#b3005e';
   var MUTED_GRAY = '#64748b';
   var INK = '#1f2937';
+  var LINE_SPACING = 1.5;
+  var CHECKBOX = '☐'; // ☐ - an empty box reads as "something to mark" far more clearly than a bullet or circle glyph
 
   function styleText(element, opts) {
     var text = element.editAsText();
@@ -1097,14 +1103,28 @@ function generatePaperForm(year, term, createdBy) {
         console.warn('Kunde inte sätta typsnitt ' + opts.font + ': ' + error.message);
       }
     }
+    element.setLineSpacing(LINE_SPACING);
     return element;
   }
 
+  // A checkbox line is a plain paragraph (not a native Docs list item) with
+  // an explicit "☐ " prefix and manual indent matching where a list item's
+  // text would otherwise start - appendListItem's own glyph types don't
+  // include a real hollow box, only round bullets, which don't read as
+  // "check this" the way an actual box does.
+  function appendCheckboxLine(text, fontSize) {
+    var para = body.appendParagraph(CHECKBOX + '  ' + text);
+    para.setIndentStart(36);
+    styleText(para, { size: fontSize }).setSpacingAfter(4);
+    return para;
+  }
+
   // Header: logo + org name on the left, the sign-up QR code on the right,
-  // side by side in a borderless table rather than each on its own
-  // full-width line - keeps the QR from interrupting the letter's flow and
-  // gives it an obvious, consistent "corner badge" home instead.
-  var headerTable = body.appendTable();
+  // in the document's actual header section (not just content on page 1) so
+  // both repeat automatically on every page - a borderless table keeps them
+  // side by side instead of each claiming a full-width line.
+  var header = doc.addHeader();
+  var headerTable = header.appendTable();
   headerTable.setBorderWidth(0);
   var headerRow = headerTable.appendTableRow();
   var brandCell = headerRow.appendTableCell();
@@ -1117,16 +1137,16 @@ function generatePaperForm(year, term, createdBy) {
   // use, not a substitute.
   var logoBlob = fetchLogoBlob();
   if (logoBlob) {
-    brandCell.appendImage(logoBlob).setWidth(200).setHeight(24.5);
+    brandCell.appendImage(logoBlob).setWidth(240).setHeight(29.4);
   }
 
   var qrBlob = fetchQrCodeBlob(publicFormUrl);
   if (qrBlob) {
-    qrCell.appendImage(qrBlob).setWidth(56).setHeight(56);
+    qrCell.appendImage(qrBlob).setWidth(80).setHeight(80);
     styleText(qrCell.appendParagraph('Skanna för att anmäla digitalt'), { color: MUTED_GRAY, size: 7 });
   }
-  headerTable.setColumnWidth(0, 380);
-  headerTable.setColumnWidth(1, 110);
+  headerTable.setColumnWidth(0, 360);
+  headerTable.setColumnWidth(1, 140);
 
   // Page 1 is the letter - context, expectations, the invitation to pitch
   // in with other ideas. Page 2 is the actual form to fill in. Splitting
@@ -1137,7 +1157,7 @@ function generatePaperForm(year, term, createdBy) {
   // does change.
   var title = body.appendParagraph('Vi behöver din hjälp!');
   title.setHeading(DocumentApp.ParagraphHeading.TITLE);
-  title.setSpacingBefore(18).setSpacingAfter(10);
+  title.setSpacingBefore(10).setSpacingAfter(10).setLineSpacing(LINE_SPACING);
 
   styleText(body.appendParagraph(
     'Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en ' +
@@ -1169,7 +1189,7 @@ function generatePaperForm(year, term, createdBy) {
 
   var termHeading = body.appendParagraph(term + ' ' + year);
   termHeading.setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  termHeading.setSpacingAfter(6);
+  termHeading.setSpacingAfter(6).setLineSpacing(LINE_SPACING);
 
   if (deadline) {
     styleText(body.appendParagraph('Lämnas till scoutledare senast ' + deadline), { bold: true, size: 12, color: ACCENT_PINK })
@@ -1178,8 +1198,7 @@ function generatePaperForm(year, term, createdBy) {
 
   styleText(body.appendParagraph('Kryssa i vad du kan hjälpa till med:'), { bold: true, size: 12 }).setSpacingAfter(4);
   signupActivities.forEach(function (activity) {
-    var item = body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
-    styleText(item, { size: 12 }).setSpacingAfter(3);
+    appendCheckboxLine(formatActivityLineForDoc(activity), 12);
   });
 
   if (standingRoles.length > 0) {
@@ -1187,8 +1206,7 @@ function generatePaperForm(year, term, createdBy) {
       .setSpacingBefore(12).setSpacingAfter(4);
     standingRoles.forEach(function (activity) {
       var label = activity.id === 'own-suggestion' ? activity.label + ':' : activity.label;
-      var item = body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
-      styleText(item, { size: 12 }).setSpacingAfter(3);
+      appendCheckboxLine(label, 12);
     });
   }
 

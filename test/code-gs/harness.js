@@ -123,11 +123,15 @@ class FakeParagraph {
     this.heading = null;
     this.spacingBefore = null;
     this.spacingAfter = null;
+    this.lineSpacing = null;
+    this.indentStart = null;
     this.textStyle = new FakeText();
   }
   setHeading(heading) { this.heading = heading; return this; }
   setSpacingBefore(v) { this.spacingBefore = v; return this; }
   setSpacingAfter(v) { this.spacingAfter = v; return this; }
+  setLineSpacing(v) { this.lineSpacing = v; return this; }
+  setIndentStart(v) { this.indentStart = v; return this; }
   editAsText() { return this.textStyle; }
 }
 
@@ -137,11 +141,15 @@ class FakeListItem {
     this.glyphType = null;
     this.spacingBefore = null;
     this.spacingAfter = null;
+    this.lineSpacing = null;
+    this.indentStart = null;
     this.textStyle = new FakeText();
   }
   setGlyphType(glyphType) { this.glyphType = glyphType; return this; }
   setSpacingBefore(v) { this.spacingBefore = v; return this; }
   setSpacingAfter(v) { this.spacingAfter = v; return this; }
+  setLineSpacing(v) { this.lineSpacing = v; return this; }
+  setIndentStart(v) { this.indentStart = v; return this; }
   editAsText() { return this.textStyle; }
 }
 
@@ -189,9 +197,13 @@ class FakeBody {
 }
 
 class FakeDoc {
-  constructor(name, id) { this.name = name; this.id = id; this.body = new FakeBody(); this.saved = false; }
+  constructor(name, id) { this.name = name; this.id = id; this.body = new FakeBody(); this.header = null; this.saved = false; }
   getBody() { return this.body; }
   getId() { return this.id; }
+  // Reuses FakeBody wholesale (same appendTable/appendParagraph/appendImage
+  // surface a real HeaderSection has) rather than a separate class - the
+  // unused pageBreaks/listItems fields on it are harmless.
+  addHeader() { this.header = new FakeBody(); return this.header; }
   saveAndClose() { this.saved = true; }
 }
 
