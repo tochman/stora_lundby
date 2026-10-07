@@ -15,6 +15,15 @@ export default {
           500: '#198754'
         }
       },
+      keyframes: {
+        'fade-in-up': {
+          from: { opacity: '0', transform: 'translateY(0.5rem)' },
+          to: { opacity: '1', transform: 'translateY(0)' }
+        }
+      },
+      animation: {
+        'fade-in-up': 'fade-in-up 250ms ease-out both'
+      },
       fontFamily: {
         logo: ['"ScouternaRoundedPro"', 'system-ui', 'sans-serif']
       }

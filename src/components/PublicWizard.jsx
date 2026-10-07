@@ -8,6 +8,27 @@ import ErrorBanner from './ErrorBanner';
 
 const steps = [1, 2, 3, 4, 5];
 
+// How long the outgoing step takes to fade before the next one fades in.
+const STEP_FADE_MS = 150;
+const FADE_IN = 'motion-safe:animate-fade-in-up';
+
+// Smoothly expands/collapses its children (animating grid-template-rows
+// from 0fr to 1fr is the CSS-only way to transition to an unknown height).
+// Collapsed content stays mounted but inert, so it can't be tabbed into,
+// and drops the parent's space-y gap so it leaves no empty space behind.
+function Reveal({ open, children }) {
+  return (
+    <div
+      className={`grid transition-all duration-300 ease-out motion-reduce:transition-none ${
+        open ? 'grid-rows-[1fr] opacity-100' : '!mt-0 grid-rows-[0fr] opacity-0'
+      }`}
+      inert={open ? undefined : ''}
+    >
+      <div className="-m-1 overflow-hidden p-1">{children}</div>
+    </div>
+  );
+}
+
 // Checked per-step (on "Nästa") and again as a safety net on final submit,
 // so a missing field is caught right where it was left blank instead of
 // only surfacing after all 5 steps are filled in.
@@ -44,6 +65,7 @@ const emptyForm = {
 
 export default function PublicWizard() {
   const [step, setStep] = useState(1);
+  const [leavingStep, setLeavingStep] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [activities, setActivities] = useState([]);
   const [config, setConfig] = useState(null);
@@ -109,6 +131,15 @@ export default function PublicWizard() {
     });
   };
 
+  const goToStep = (target) => {
+    setError('');
+    setLeavingStep(true);
+    setTimeout(() => {
+      setStep(target);
+      setLeavingStep(false);
+    }, STEP_FADE_MS);
+  };
+
   const nextStep = () => {
     const stepError = getStepError(step, formData);
     if (stepError) {
@@ -116,8 +147,7 @@ export default function PublicWizard() {
       return;
     }
     if (step < steps.length) {
-      setStep((current) => current + 1);
-      setError('');
+      goToStep(step + 1);
     }
   };
 
@@ -135,8 +165,7 @@ export default function PublicWizard() {
 
   const previousStep = () => {
     if (step > 1) {
-      setStep((current) => current - 1);
-      setError('');
+      goToStep(step - 1);
     }
   };
 
@@ -198,7 +227,7 @@ export default function PublicWizard() {
   if (submitted) {
     return (
       <PublicLayout>
-        <div className="mx-auto max-w-2xl text-center">
+        <div className={`mx-auto max-w-2xl text-center ${FADE_IN}`}>
           <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-green-100 text-3xl text-green-600">
             ✓
           </div>
@@ -270,7 +299,7 @@ export default function PublicWizard() {
             form previously jumped straight into the checklist with none of
             the "why we need this, what's expected of you" framing. */}
         {step === 1 && (
-          <div className="card mb-8 space-y-3 text-sm text-slate-700">
+          <div className={`card mb-8 space-y-3 text-sm text-slate-700 transition-opacity duration-150 ${leavingStep ? 'opacity-0' : FADE_IN}`}>
             <h2 className="text-xl font-bold text-slate-800">Vi behöver din hjälp!</h2>
             <p>
               Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en
@@ -315,162 +344,167 @@ export default function PublicWizard() {
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {step === 1 && (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-slate-800">Kryssa i vad du kan hjälpa till med</h2>
-              <p className="text-sm text-slate-500">Marknadspass, förberedelser, arbetsdag och pysseldag.</p>
-              <div className="space-y-2">
-                {workActivities.map((activity) => (
-                  <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                      checked={formData.selectedActivities.includes(activity.id)}
-                      onChange={() => toggleActivity(activity.id)}
-                    />
-                    <span>
-                      <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
-                      <span className="block text-slate-600">{activity.label}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 2 && (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-slate-800">Gåva till lotteriet</h2>
-              <p className="text-sm text-slate-500">
-                Skänker du en vinst till lotteriet? Kryssa i vilken/vilka marknader och lämna in gåvan på angiven tid.
-              </p>
-              <div className="space-y-2">
-                {giftActivities.map((activity) => (
-                  <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
-                    <input
-                      type="checkbox"
-                      className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                      checked={formData.selectedActivities.includes(activity.id)}
-                      onChange={() => toggleActivity(activity.id)}
-                    />
-                    <span>
-                      <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
-                      <span className="block text-slate-600">{activity.label}</span>
-                    </span>
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 3 && (
-            <div className="space-y-3">
-              <h2 className="text-2xl font-bold text-slate-800">Jag kan ställa upp till följande</h2>
-              <div className="space-y-2">
-                {standingRoleActivities.map((activity) => (
-                  <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
-                    <label className="flex items-start gap-3 text-sm text-slate-700">
+          <div key={step} className={`transition-opacity duration-150 ${leavingStep ? 'opacity-0' : FADE_IN}`}>
+            {step === 1 && (
+              <div className="space-y-3">
+                <h2 className="text-2xl font-bold text-slate-800">Kryssa i vad du kan hjälpa till med</h2>
+                <p className="text-sm text-slate-500">Marknadspass, förberedelser, arbetsdag och pysseldag.</p>
+                <div className="space-y-2">
+                  {workActivities.map((activity) => (
+                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
                       <input
                         type="checkbox"
                         className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
                         checked={formData.selectedActivities.includes(activity.id)}
                         onChange={() => toggleActivity(activity.id)}
                       />
-                      <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
+                      <span>
+                        <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
+                        <span className="block text-slate-600">{activity.label}</span>
+                      </span>
                     </label>
-                    {activity.id === 'own-suggestion' && formData.selectedActivities.includes('own-suggestion') && (
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {step === 2 && (
+              <div className="space-y-3">
+                <h2 className="text-2xl font-bold text-slate-800">Gåva till lotteriet</h2>
+                <p className="text-sm text-slate-500">
+                  Skänker du en vinst till lotteriet? Kryssa i vilken/vilka marknader och lämna in gåvan på angiven tid.
+                </p>
+                <div className="space-y-2">
+                  {giftActivities.map((activity) => (
+                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
                       <input
-                        type="text"
-                        value={formData.ownSuggestionText}
-                        onChange={(e) => updateField('ownSuggestionText', e.target.value)}
-                        className="input mt-2"
-                        placeholder="Beskriv ditt förslag"
+                        type="checkbox"
+                        className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                        checked={formData.selectedActivities.includes(activity.id)}
+                        onChange={() => toggleActivity(activity.id)}
                       />
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {step === 4 && (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold text-slate-800">Kontaktuppgifter</h2>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div>
-                  <label className="label" htmlFor="guardianName">Namn</label>
-                  <input id="guardianName" type="text" value={formData.guardianName} onChange={(e) => updateField('guardianName', e.target.value)} className="input" />
-                </div>
-                <div>
-                  <label className="label" htmlFor="guardianPhone">Telefon</label>
-                  <input id="guardianPhone" type="tel" value={formData.guardianPhone} onChange={(e) => updateField('guardianPhone', e.target.value)} className="input" />
-                </div>
-                <div className="md:col-span-2">
-                  <label className="label" htmlFor="guardianEmail">E-post</label>
-                  <input id="guardianEmail" type="email" value={formData.guardianEmail} onChange={(e) => updateField('guardianEmail', e.target.value)} className="input" />
+                      <span>
+                        <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
+                        <span className="block text-slate-600">{activity.label}</span>
+                      </span>
+                    </label>
+                  ))}
                 </div>
               </div>
+            )}
 
-              <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är förälder till följande scout</h2>
-              <label className="flex items-start gap-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={formData.noScoutChild}
-                  onChange={(e) => toggleNoScoutChild(e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                />
-                <span>Jag har inget barn i scouterna (t.ex. du är själv aktiv medlem, rover eller sitter i styrelsen)</span>
-              </label>
-              {!formData.noScoutChild && (
+            {step === 3 && (
+              <div className="space-y-3">
+                <h2 className="text-2xl font-bold text-slate-800">Jag kan ställa upp till följande</h2>
+                <div className="space-y-2">
+                  {standingRoleActivities.map((activity) => (
+                    <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
+                      <label className="flex items-start gap-3 text-sm text-slate-700">
+                        <input
+                          type="checkbox"
+                          className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                          checked={formData.selectedActivities.includes(activity.id)}
+                          onChange={() => toggleActivity(activity.id)}
+                        />
+                        <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
+                      </label>
+                      {activity.id === 'own-suggestion' && (
+                        <Reveal open={formData.selectedActivities.includes('own-suggestion')}>
+                          <input
+                            type="text"
+                            value={formData.ownSuggestionText}
+                            onChange={(e) => updateField('ownSuggestionText', e.target.value)}
+                            className="input mt-2"
+                            placeholder="Beskriv ditt förslag"
+                          />
+                        </Reveal>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {step === 4 && (
+              <div className="space-y-4">
+                <h2 className="text-2xl font-bold text-slate-800">Kontaktuppgifter</h2>
                 <div className="grid gap-4 md:grid-cols-2">
                   <div>
-                    <label className="label" htmlFor="scoutName">Namn</label>
-                    <input id="scoutName" type="text" value={formData.scoutName} onChange={(e) => updateField('scoutName', e.target.value)} className="input" />
+                    <label className="label" htmlFor="guardianName">Namn</label>
+                    <input id="guardianName" type="text" value={formData.guardianName} onChange={(e) => updateField('guardianName', e.target.value)} className="input" />
                   </div>
                   <div>
-                    <label className="label" htmlFor="avdelning">Avdelning</label>
-                    <select id="avdelning" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input">
-                      <option value="">Välj avdelning</option>
-                      {AVDELNINGAR.map((avdelning) => (
-                        <option key={avdelning} value={avdelning}>{avdelning}</option>
-                      ))}
-                    </select>
+                    <label className="label" htmlFor="guardianPhone">Telefon</label>
+                    <input id="guardianPhone" type="tel" value={formData.guardianPhone} onChange={(e) => updateField('guardianPhone', e.target.value)} className="input" />
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="label" htmlFor="guardianEmail">E-post</label>
+                    <input id="guardianEmail" type="email" value={formData.guardianEmail} onChange={(e) => updateField('guardianEmail', e.target.value)} className="input" />
                   </div>
                 </div>
-              )}
-            </div>
-          )}
 
-          {step === 5 && (
-            <div className="space-y-4">
-              <div>
-                <label className="label" htmlFor="comments">Kommentar</label>
-                <textarea
-                  id="comments"
-                  value={formData.comments}
-                  onChange={(e) => updateField('comments', e.target.value)}
-                  className="input min-h-28"
-                  placeholder="Skriv eventuella önskemål eller behov här..."
-                />
+                <h2 className="pt-2 text-2xl font-bold text-slate-800">Jag är förälder till följande scout</h2>
+                <label className="flex items-start gap-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={formData.noScoutChild}
+                    onChange={(e) => toggleNoScoutChild(e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                  />
+                  <span>Jag har inget barn i scouterna (t.ex. du är själv aktiv medlem, rover eller sitter i styrelsen)</span>
+                </label>
+                <Reveal open={!formData.noScoutChild}>
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="label" htmlFor="scoutName">Namn</label>
+                      <input id="scoutName" type="text" value={formData.scoutName} onChange={(e) => updateField('scoutName', e.target.value)} className="input" />
+                    </div>
+                    <div>
+                      <label className="label" htmlFor="avdelning">Avdelning</label>
+                      <select id="avdelning" value={formData.avdelning} onChange={(e) => updateField('avdelning', e.target.value)} className="input">
+                        <option value="">Välj avdelning</option>
+                        {AVDELNINGAR.map((avdelning) => (
+                          <option key={avdelning} value={avdelning}>{avdelning}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </Reveal>
               </div>
+            )}
 
-              <h2 className="pt-2 text-2xl font-bold text-slate-800">GDPR-samtycke</h2>
-              <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
-                <p>{config?.consentText}</p>
+            {step === 5 && (
+              <div className="space-y-4">
+                <div>
+                  <label className="label" htmlFor="comments">Kommentar</label>
+                  <textarea
+                    id="comments"
+                    value={formData.comments}
+                    onChange={(e) => updateField('comments', e.target.value)}
+                    className="input min-h-28"
+                    placeholder="Skriv eventuella önskemål eller behov här..."
+                  />
+                </div>
+
+                <h2 className="pt-2 text-2xl font-bold text-slate-800">GDPR-samtycke</h2>
+                <div className="rounded-lg border border-blue-200 bg-blue-50 p-4 text-sm text-slate-700">
+                  <p>{config?.consentText}</p>
+                </div>
+                <label className="flex items-start gap-3 text-sm text-slate-700">
+                  <input
+                    type="checkbox"
+                    checked={formData.consent}
+                    onChange={(e) => updateField('consent', e.target.checked)}
+                    className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
+                  />
+                  <span>Jag godkänner GDPR-samtycke.</span>
+                </label>
               </div>
-              <label className="flex items-start gap-3 text-sm text-slate-700">
-                <input
-                  type="checkbox"
-                  checked={formData.consent}
-                  onChange={(e) => updateField('consent', e.target.checked)}
-                  className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
-                />
-                <span>Jag godkänner GDPR-samtycke.</span>
-              </label>
-            </div>
-          )}
+            )}
 
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>}
+          </div>
+
+          {error && <div className={`rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700 ${FADE_IN}`}>{error}</div>}
 
           <div className="flex justify-between gap-4 pt-4">
             <button type="button" className="btn btn-secondary" disabled={step === 1} onClick={previousStep}>
