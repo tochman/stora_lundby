@@ -101,23 +101,48 @@ class FakeSpreadsheet {
 // generatePaperForm to run end to end and for tests to assert on what was
 // written (paragraph/list text, image presence, sharing, trashing), not a
 // faithful recreation of the full Docs/Drive API.
+//
+// FakeText is stateful (bold/italic/color/size/font all start as null, not
+// "inherited from whatever came before") specifically so tests can prove
+// Code.gs sets every property explicitly on every element - that's the
+// actual fix for the real Docs bug where an unset property silently carries
+// forward from the previous paragraph's trailing style. A no-op mock
+// would've passed even with that bug still present.
 class FakeText {
-  setBold() { return this; }
-  setItalic() { return this; }
-  setFontSize() { return this; }
-  setForegroundColor() { return this; }
+  constructor() { this.bold = null; this.italic = null; this.color = null; this.fontSize = null; this.fontFamily = null; }
+  setBold(v) { this.bold = v; return this; }
+  setItalic(v) { this.italic = v; return this; }
+  setFontSize(v) { this.fontSize = v; return this; }
+  setForegroundColor(v) { this.color = v; return this; }
+  setFontFamily(v) { this.fontFamily = v; return this; }
 }
 
 class FakeParagraph {
-  constructor(text) { this.text = text; this.heading = null; }
+  constructor(text) {
+    this.text = text;
+    this.heading = null;
+    this.spacingBefore = null;
+    this.spacingAfter = null;
+    this.textStyle = new FakeText();
+  }
   setHeading(heading) { this.heading = heading; return this; }
-  editAsText() { return new FakeText(); }
+  setSpacingBefore(v) { this.spacingBefore = v; return this; }
+  setSpacingAfter(v) { this.spacingAfter = v; return this; }
+  editAsText() { return this.textStyle; }
 }
 
 class FakeListItem {
-  constructor(text) { this.text = text; this.glyphType = null; }
+  constructor(text) {
+    this.text = text;
+    this.glyphType = null;
+    this.spacingBefore = null;
+    this.spacingAfter = null;
+    this.textStyle = new FakeText();
+  }
   setGlyphType(glyphType) { this.glyphType = glyphType; return this; }
-  editAsText() { return new FakeText(); }
+  setSpacingBefore(v) { this.spacingBefore = v; return this; }
+  setSpacingAfter(v) { this.spacingAfter = v; return this; }
+  editAsText() { return this.textStyle; }
 }
 
 class FakeImage {

@@ -1066,6 +1066,36 @@ function generatePaperForm(year, term, createdBy) {
   var body = doc.getBody();
   body.setMarginTop(40).setMarginBottom(40).setMarginLeft(56).setMarginRight(56);
 
+  // Google Docs carries a paragraph's trailing text style forward as the
+  // starting style for whatever gets appended next (like continuing to type
+  // in Word right after bold colored text) - appendParagraph/appendListItem
+  // do NOT reset to a clean default. Every call below sets bold AND color
+  // explicitly, even to "off"/black, specifically to stop that bleed - a
+  // past version here only ever turned bold/pink ON (for section headers
+  // and the deadline line) and never back OFF, so both silently carried
+  // through every single thing that came after them for the rest of the
+  // page.
+  var BRAND_BLUE = '#043a63';
+  var ACCENT_PINK = '#b3005e';
+  var MUTED_GRAY = '#64748b';
+  var INK = '#1f2937';
+
+  function styleText(element, opts) {
+    var text = element.editAsText();
+    text.setBold(!!opts.bold);
+    text.setItalic(!!opts.italic);
+    text.setForegroundColor(opts.color || INK);
+    if (opts.size) text.setFontSize(opts.size);
+    if (opts.font) {
+      try {
+        text.setFontFamily(opts.font);
+      } catch (error) {
+        console.warn('Kunde inte sätta typsnitt ' + opts.font + ': ' + error.message);
+      }
+    }
+    return element;
+  }
+
   // Header: logo + org name on the left, the sign-up QR code on the right,
   // side by side in a borderless table rather than each on its own
   // full-width line - keeps the QR from interrupting the letter's flow and
@@ -1078,14 +1108,19 @@ function generatePaperForm(year, term, createdBy) {
 
   var logoBlob = fetchLogoBlob();
   if (logoBlob) {
-    brandCell.appendImage(logoBlob).setWidth(26).setHeight(26);
+    brandCell.appendImage(logoBlob).setWidth(30).setHeight(30);
   }
-  brandCell.appendParagraph('STORA LUNDBY SCOUTKÅR').editAsText().setBold(true).setFontSize(12);
+  // Poppins approximates the app's rounded ScouternaRoundedPro wordmark
+  // reasonably well - Docs can't load that font itself (it's a licensed
+  // Scouterna asset, not a published Google Font), so this is the closest
+  // practical substitute rather than the real thing.
+  styleText(brandCell.appendParagraph('STORA LUNDBY SCOUTKÅR'), { bold: true, color: BRAND_BLUE, size: 13, font: 'Poppins' })
+    .setSpacingBefore(4);
 
   var qrBlob = fetchQrCodeBlob(publicFormUrl);
   if (qrBlob) {
     qrCell.appendImage(qrBlob).setWidth(56).setHeight(56);
-    qrCell.appendParagraph('Skanna för att anmäla digitalt').editAsText().setFontSize(7).setForegroundColor('#64748b');
+    styleText(qrCell.appendParagraph('Skanna för att anmäla digitalt'), { color: MUTED_GRAY, size: 7 });
   }
   headerTable.setColumnWidth(0, 380);
   headerTable.setColumnWidth(1, 110);
@@ -1097,15 +1132,20 @@ function generatePaperForm(year, term, createdBy) {
   // given term has without ever squeezing the letter's font size down to
   // compensate - and leaves the letter unchanged by that resize whenever it
   // does change.
-  body.appendParagraph('Vi behöver din hjälp!').setHeading(DocumentApp.ParagraphHeading.TITLE);
+  var title = body.appendParagraph('Vi behöver din hjälp!');
+  title.setHeading(DocumentApp.ParagraphHeading.TITLE);
+  title.setSpacingBefore(18).setSpacingAfter(10);
 
-  body.appendParagraph(
+  styleText(body.appendParagraph(
     'Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en ' +
     'partipolitiskt och religiöst obunden organisation. Om vi ska kunna fortsätta att ha en scoutkår så behöver ' +
     'vi hjälp av er scoutföräldrar med vissa aktiviteter.'
-  ).editAsText().setFontSize(11);
-  body.appendParagraph('Du som förälder förväntas hjälpa till vid minst ett, gärna två tillfällen varje termin. Det handlar om att:')
-    .editAsText().setBold(true).setFontSize(11);
+  ), { size: 11 }).setSpacingAfter(8);
+
+  styleText(
+    body.appendParagraph('Du som förälder förväntas hjälpa till vid minst ett, gärna två tillfällen varje termin. Det handlar om att:'),
+    { bold: true, size: 11 }
+  ).setSpacingAfter(4);
 
   [
     'Få inkomster från marknader på Mjörnbotorget och från annan försäljning. Här behövs det dels skänkta vinster ' +
@@ -1114,45 +1154,51 @@ function generatePaperForm(year, term, createdBy) {
     'Ibland behöver vi också praktisk hjälp för en enstaka insats. Det kommer vi att efterlysa i månadsbreven ' +
       'som vi skickar ut.'
   ].forEach(function (text) {
-    body.appendListItem(text).setGlyphType(DocumentApp.GlyphType.BULLET).editAsText().setFontSize(11);
+    var item = body.appendListItem(text).setGlyphType(DocumentApp.GlyphType.BULLET);
+    styleText(item, { size: 11 }).setSpacingAfter(3);
   });
 
-  body.appendParagraph('Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!')
-    .editAsText().setFontSize(11);
-  body.appendParagraph('Styrelsen i Stora Lundby Scoutkår').editAsText().setItalic(true).setFontSize(11);
+  styleText(body.appendParagraph('Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!'), { size: 11 })
+    .setSpacingBefore(8).setSpacingAfter(4);
+  styleText(body.appendParagraph('Styrelsen i Stora Lundby Scoutkår'), { italic: true, size: 11 });
 
   body.appendPageBreak();
 
-  body.appendParagraph(term + ' ' + year).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  var termHeading = body.appendParagraph(term + ' ' + year);
+  termHeading.setHeading(DocumentApp.ParagraphHeading.HEADING1);
+  termHeading.setSpacingAfter(6);
 
   if (deadline) {
-    var deadlineText = body.appendParagraph('Lämnas till scoutledare senast ' + deadline).editAsText();
-    deadlineText.setBold(true).setFontSize(12).setForegroundColor('#B3005E');
+    styleText(body.appendParagraph('Lämnas till scoutledare senast ' + deadline), { bold: true, size: 12, color: ACCENT_PINK })
+      .setSpacingAfter(12);
   }
 
-  body.appendParagraph('Kryssa i vad du kan hjälpa till med:').editAsText().setBold(true).setFontSize(12);
+  styleText(body.appendParagraph('Kryssa i vad du kan hjälpa till med:'), { bold: true, size: 12 }).setSpacingAfter(4);
   signupActivities.forEach(function (activity) {
-    body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).editAsText().setFontSize(12);
+    var item = body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+    styleText(item, { size: 12 }).setSpacingAfter(3);
   });
 
   if (standingRoles.length > 0) {
-    body.appendParagraph('Jag kan ställa upp till följande:').editAsText().setBold(true).setFontSize(12);
+    styleText(body.appendParagraph('Jag kan ställa upp till följande:'), { bold: true, size: 12 })
+      .setSpacingBefore(12).setSpacingAfter(4);
     standingRoles.forEach(function (activity) {
       var label = activity.id === 'own-suggestion' ? activity.label + ':' : activity.label;
-      body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).editAsText().setFontSize(12);
+      var item = body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+      styleText(item, { size: 12 }).setSpacingAfter(3);
     });
   }
 
-  body.appendParagraph('');
-  body.appendParagraph('Uppgifter om mig som vårdnadshavare:').editAsText().setBold(true).setFontSize(12);
-  body.appendParagraph('Namn ________________________________________________________').editAsText().setFontSize(12);
-  body.appendParagraph('Telefon ________________________________________________').editAsText().setFontSize(12);
-  body.appendParagraph('E-post ________________________________________________________').editAsText().setFontSize(12);
+  styleText(body.appendParagraph('Uppgifter om mig som vårdnadshavare:'), { bold: true, size: 12 })
+    .setSpacingBefore(16).setSpacingAfter(4);
+  styleText(body.appendParagraph('Namn ________________________________________________________'), { size: 12 }).setSpacingAfter(3);
+  styleText(body.appendParagraph('Telefon ________________________________________________'), { size: 12 }).setSpacingAfter(3);
+  styleText(body.appendParagraph('E-post ________________________________________________________'), { size: 12 });
 
-  body.appendParagraph('');
-  body.appendParagraph('Jag är vårdnadshavare till följande scout:').editAsText().setBold(true).setFontSize(12);
-  body.appendParagraph('Namn ________________________________________________________').editAsText().setFontSize(12);
-  body.appendParagraph('Avdelning ________________________________________________________').editAsText().setFontSize(12);
+  styleText(body.appendParagraph('Jag är vårdnadshavare till följande scout:'), { bold: true, size: 12 })
+    .setSpacingBefore(14).setSpacingAfter(4);
+  styleText(body.appendParagraph('Namn ________________________________________________________'), { size: 12 }).setSpacingAfter(3);
+  styleText(body.appendParagraph('Avdelning ________________________________________________________'), { size: 12 });
 
   doc.saveAndClose();
 

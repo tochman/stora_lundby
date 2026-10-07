@@ -434,6 +434,56 @@ describe('paper form (Google Doc)', () => {
     expect(record.createdBy).toBe('admin@storalundby.se');
   });
 
+  it('does not let the deadline\'s pink or a header\'s bold bleed into the content after it', () => {
+    // Regression test for a real bug: Docs carries a paragraph's trailing
+    // style forward onto whatever's appended next, so a prior version of
+    // this code (which only ever turned bold/pink ON for the deadline line
+    // and section headers, never explicitly back OFF afterward) rendered
+    // nearly the entire second page bold and pink - every checklist item,
+    // every standing role, and every contact field line.
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+    const INK = '#1f2937';
+    const PINK = '#b3005e';
+
+    const deadlinePara = doc.body.paragraphs.find((p) => p.text.startsWith('Lämnas till scoutledare'));
+    expect(deadlinePara.textStyle.color).toBe(PINK);
+    expect(deadlinePara.textStyle.bold).toBe(true);
+
+    const checklistHeader = doc.body.paragraphs.find((p) => p.text === 'Kryssa i vad du kan hjälpa till med:');
+    expect(checklistHeader.textStyle.bold).toBe(true); // headers ARE meant to be bold...
+    expect(checklistHeader.textStyle.color).toBe(INK); // ...but never pink - that's only the deadline line
+
+    const checklistItems = doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET');
+    checklistItems.forEach((item) => {
+      expect(item.textStyle.bold).toBe(false);
+      expect(item.textStyle.color).toBe(INK);
+    });
+
+    const introBullets = doc.body.listItems.filter((li) => li.glyphType === 'BULLET');
+    introBullets.forEach((item) => {
+      expect(item.textStyle.bold).toBe(false);
+      expect(item.textStyle.color).toBe(INK);
+    });
+
+    const fieldLines = doc.body.paragraphs.filter((p) => p.text.startsWith('Namn ') || p.text.startsWith('Avdelning '));
+    expect(fieldLines.length).toBeGreaterThan(0);
+    fieldLines.forEach((line) => {
+      expect(line.textStyle.bold).toBe(false);
+      expect(line.textStyle.color).toBe(INK);
+    });
+  });
+
+  it('styles the header wordmark in the brand color with a specific font, independent of the logo fetch', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+    const brandCell = doc.body.tables[0].rows[0].cells[0];
+    const wordmark = brandCell.paragraphs.find((p) => p.text === 'STORA LUNDBY SCOUTKÅR');
+    expect(wordmark.textStyle.color).toBe('#043a63');
+    expect(wordmark.textStyle.bold).toBe(true);
+    expect(wordmark.textStyle.fontFamily).toBe('Poppins');
+  });
+
   it('shares the created doc as view-only for anyone with the link', () => {
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const file = ctx.driveFiles.get(result.docId);
