@@ -348,6 +348,27 @@ function getSpreadsheet() {
   return newSpreadsheet;
 }
 
+// Used by generatePaperForm so a new doc lands next to the spreadsheet
+// instead of wherever DocumentApp.create() defaults to (My Drive's root).
+// A file can technically have more than one parent folder in Drive - just
+// the first one is used, which matches the common case of a sheet filed in
+// exactly one folder. Returns null (not an error) if the sheet has no
+// parent folder (i.e. it's already at the root of My Drive) or if the
+// Drive lookup fails for any reason - the doc just stays wherever
+// DocumentApp put it rather than blocking creation over this.
+function getSpreadsheetParentFolder() {
+  try {
+    var ssFile = DriveApp.getFileById(getSpreadsheet().getId());
+    var parents = ssFile.getParents();
+    if (parents.hasNext()) {
+      return parents.next();
+    }
+  } catch (error) {
+    console.warn('Kunde inte hitta kalkylarkets mapp: ' + error.message);
+  }
+  return null;
+}
+
 function getSheetByName(name) {
   var ss = getSpreadsheet();
   var sheet = ss.getSheetByName(name);
@@ -1103,6 +1124,15 @@ function generatePaperForm(year, term, createdBy) {
   // view-only, not editable by just anyone with the URL.
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
+  // DocumentApp.create() always drops the new doc in My Drive's root,
+  // regardless of where the spreadsheet lives - move it alongside the
+  // spreadsheet so generated paper forms don't scatter across Drive.
+  var spreadsheetFolder = getSpreadsheetParentFolder();
+  if (spreadsheetFolder) {
+    spreadsheetFolder.addFile(file);
+    DriveApp.getRootFolder().removeFile(file);
+  }
+
   var docUrl = file.getUrl();
   getSheetByName(SHEET_NAMES.paperForms).appendRow([year, term, doc.getId(), docUrl, new Date(), createdBy || '']);
 
@@ -1143,4 +1173,17 @@ function testSetup() {
   initializeProject();
   Logger.log('Project initialized');
   Logger.log(JSON.stringify(getActivities()));
+}
+
+// Google only prompts for a scope the first time a function actually
+// exercises the service that needs it - testSetup() never touches
+// DocumentApp/DriveApp, so running it does NOT trigger the consent screen
+// for the documents/drive.file scopes added for the paper form feature.
+// Run THIS function once from the editor (select it in the function
+// dropdown, click Run) to force that prompt; the test doc it creates can
+// be deleted afterward.
+function testDocumentAccess() {
+  var doc = DocumentApp.create('Behörighetstest (kan raderas)');
+  var file = DriveApp.getFileById(doc.getId());
+  Logger.log('OK: ' + file.getUrl());
 }

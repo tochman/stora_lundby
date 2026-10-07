@@ -471,4 +471,25 @@ describe('paper form (Google Doc)', () => {
     expect(doc.body.images).toHaveLength(0);
     expect(doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET')).toHaveLength(13);
   });
+
+  it('moves the generated doc into the spreadsheet\'s parent folder, when it has one', () => {
+    const parentFolder = ctx.context.DriveApp.createFolder('Föräldraengagemang');
+    const spreadsheetFile = ctx.context.DriveApp.getFileById(ctx.context.getSpreadsheet().getId());
+    parentFolder.addFile(spreadsheetFile);
+
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+
+    const docFile = ctx.driveFiles.get(result.docId);
+    expect(docFile.parents).toContain(parentFolder);
+    expect(parentFolder.fileIds.has(result.docId)).toBe(true);
+    expect(ctx.rootFolder.fileIds.has(result.docId)).toBe(false);
+  });
+
+  it('leaves the doc where it was created if the spreadsheet has no parent folder', () => {
+    // No folder set up for the spreadsheet's Drive file in this test - the
+    // default state, matching a spreadsheet sitting at the root of My Drive.
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const docFile = ctx.driveFiles.get(result.docId);
+    expect(docFile.parents).toHaveLength(0);
+  });
 });

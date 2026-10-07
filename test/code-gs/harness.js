@@ -79,6 +79,11 @@ class FakeSheet {
 class FakeSpreadsheet {
   constructor() {
     this.sheets = new Map();
+    this.id = 'fake-id'; // matches the SPREADSHEET_ID script property set below
+  }
+
+  getId() {
+    return this.id;
   }
 
   getSheetByName(name) {
@@ -144,10 +149,36 @@ class FakeDoc {
 }
 
 class FakeDriveFile {
-  constructor(id) { this.id = id; this.trashed = false; this.sharing = null; }
+  constructor(id) { this.id = id; this.trashed = false; this.sharing = null; this.parents = []; }
   setSharing(access, permission) { this.sharing = { access, permission }; return this; }
   setTrashed(value) { this.trashed = value; return this; }
   getUrl() { return 'https://docs.google.com/document/d/' + this.id + '/edit'; }
+  getParents() {
+    const parents = this.parents;
+    let i = 0;
+    return {
+      hasNext: () => i < parents.length,
+      next: () => {
+        const value = parents[i];
+        i += 1;
+        return value;
+      }
+    };
+  }
+}
+
+class FakeFolder {
+  constructor(id) { this.id = id; this.fileIds = new Set(); }
+  addFile(file) {
+    this.fileIds.add(file.id);
+    if (!file.parents.includes(this)) file.parents.push(this);
+    return this;
+  }
+  removeFile(file) {
+    this.fileIds.delete(file.id);
+    file.parents = file.parents.filter((p) => p !== this);
+    return this;
+  }
 }
 
 export function createCodeGsContext() {
@@ -161,6 +192,8 @@ export function createCodeGsContext() {
   const docs = new Map();
   const driveFiles = new Map();
   let docIdCounter = 0;
+  const rootFolder = new FakeFolder('root');
+  let folderIdCounter = 0;
 
   const context = {
     console,
@@ -178,6 +211,12 @@ export function createCodeGsContext() {
       getFileById: (id) => {
         if (!driveFiles.has(id)) driveFiles.set(id, new FakeDriveFile(id));
         return driveFiles.get(id);
+      },
+      getRootFolder: () => rootFolder,
+      createFolder: (name) => {
+        folderIdCounter += 1;
+        const folder = new FakeFolder(`folder-${folderIdCounter}`, name);
+        return folder;
       },
       Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
       Permission: { VIEW: 'VIEW' }
@@ -253,5 +292,5 @@ export function createCodeGsContext() {
   // with *this* context's Date constructor, not the host realm's.
   context.__makeDate = vm.runInContext('(function (iso) { return new Date(iso); })', context);
 
-  return { context, spreadsheet, sentEmails, tokenInfo, urlFetchCalls, docs, driveFiles };
+  return { context, spreadsheet, sentEmails, tokenInfo, urlFetchCalls, docs, driveFiles, rootFolder };
 }
