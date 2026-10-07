@@ -50,6 +50,10 @@ function SignInScreen({ error }) {
     initGoogleSignIn({
       onCredential: (credential) => {
         storeIdToken(credential);
+        // Fire-and-forget: this is a login log entry, not part of the
+        // sign-in itself - access is still enforced by requireAdmin on the
+        // actual data calls the dashboard makes right after reloading.
+        api.recordLogin(credential).catch(() => {});
         window.location.reload();
       }
     })

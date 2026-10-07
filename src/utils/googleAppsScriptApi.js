@@ -31,9 +31,11 @@ const REQUEST_TIMEOUT_MS = 25000;
 // retrying a failed batch as a whole is exactly as safe as retrying each of
 // its parts individually. If a future caller ever batches a non-idempotent
 // write alongside these, 'batch' would need to come back off this list.
+// recordLogin deliberately excluded - a retried call would log a duplicate
+// login row, and a lost login row isn't worth risking that.
 const RETRY_SAFE_ACTIONS = new Set([
   'getActivities', 'getActivitiesAdmin', 'getConfig', 'getApplications',
-  'getAdmins', 'getPurgeLog',
+  'getAdmins', 'getPurgeLog', 'getLoginLog',
   'submitApplication', 'updateApplicationStatus', 'updateApplicationNotes',
   'setAdminActive', 'addAdmin', 'purgeTermData', 'batch', 'getPaperForm'
 ]);
@@ -130,6 +132,8 @@ export const api = {
   purgeTermData: (year, term, idToken) => callAppsScript('purgeTermData', { year, term, idToken }),
   getPurgeLog: (idToken) => callAppsScript('getPurgeLog', { idToken }),
   getAdmins: (idToken) => callAppsScript('getAdmins', { idToken }),
+  recordLogin: (idToken) => callAppsScript('recordLogin', { idToken }),
+  getLoginLog: (idToken) => callAppsScript('getLoginLog', { idToken }),
   addAdmin: (email, idToken) => callAppsScript('addAdmin', { email, idToken }),
   setAdminActive: (email, active, idToken) => callAppsScript('setAdminActive', { email, active, idToken }),
   updateConfig: (updates, idToken) => callAppsScript('updateConfig', { updates, idToken }),

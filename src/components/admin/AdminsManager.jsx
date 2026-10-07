@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
-import api from '../../utils/googleAppsScriptApi';
+import api, { unwrapBatchResult } from '../../utils/googleAppsScriptApi';
 import LoadingOverlay from '../LoadingOverlay';
 import ErrorBanner from '../ErrorBanner';
 
+function formatTimestamp(value) {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toLocaleString('sv-SE', { dateStyle: 'short', timeStyle: 'short' });
+}
+
 export default function AdminsManager({ idToken, currentEmail }) {
   const [admins, setAdmins] = useState([]);
+  const [loginLog, setLoginLog] = useState([]);
   const [newEmail, setNewEmail] = useState('');
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
@@ -15,8 +23,12 @@ export default function AdminsManager({ idToken, currentEmail }) {
   const load = async () => {
     try {
       setLoading(true);
-      const list = await api.getAdmins(idToken);
-      setAdmins(list);
+      const results = await api.batch([
+        { action: 'getAdmins', params: { idToken } },
+        { action: 'getLoginLog', params: { idToken } }
+      ]);
+      setAdmins(unwrapBatchResult(results, 0, 'hämtning av adminlistan'));
+      setLoginLog(unwrapBatchResult(results, 1, 'hämtning av inloggningshistorik'));
       setError('');
       setHasLoaded(true);
     } catch (err) {
@@ -129,6 +141,30 @@ export default function AdminsManager({ idToken, currentEmail }) {
                 </tr>
               );
             })}
+          </tbody>
+        </table>
+      </section>
+
+      <section className="card">
+        <h2 className="mb-4 text-xl font-bold text-slate-800">Inloggningshistorik</h2>
+        <table className="min-w-full text-left text-sm">
+          <thead className="border-b border-slate-200">
+            <tr>
+              <th className="px-2 py-2">Tidpunkt</th>
+              <th className="px-2 py-2">E-post</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loginLog.length === 0 ? (
+              <tr><td className="px-2 py-4 text-slate-500" colSpan={2}>Inga inloggningar registrerade ännu.</td></tr>
+            ) : (
+              loginLog.map((entry, index) => (
+                <tr key={index} className="border-b border-slate-200">
+                  <td className="px-2 py-2">{formatTimestamp(entry.loggedInAt)}</td>
+                  <td className="px-2 py-2">{entry.email}</td>
+                </tr>
+              ))
+            )}
           </tbody>
         </table>
       </section>

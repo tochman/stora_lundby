@@ -13,7 +13,8 @@ var SHEET_NAMES = {
   admins: 'Admins',
   activities: 'Activities',
   purgeLog: 'PurgeLog',
-  paperForms: 'PaperForms'
+  paperForms: 'PaperForms',
+  loginLog: 'LoginLog'
 };
 
 var DEFAULT_ACTIVITIES = [
@@ -112,6 +113,12 @@ function handleAction(action, params) {
     case 'getAdmins':
       requireAdmin(params);
       return getAdmins();
+    case 'recordLogin':
+      var loggingInAdmin = requireAdmin(params);
+      return recordLogin(loggingInAdmin);
+    case 'getLoginLog':
+      requireAdmin(params);
+      return getLoginLogEntries();
     case 'addAdmin':
       requireAdmin(params);
       return addAdmin(params.email);
@@ -231,7 +238,7 @@ function isAdmin(userEmail) {
 // sheet added in code wouldn't actually get created on an already-warm
 // deployment until the old cache entry expired up to 6 hours later (see
 // the "Sheet ... could not be found" incident when PaperForms was added).
-var PROJECT_SCHEMA_VERSION = 2;
+var PROJECT_SCHEMA_VERSION = 3;
 
 function initializeProject() {
   // Every request calls this, but the sheets only ever need creating once.
@@ -311,6 +318,11 @@ function initializeProject() {
   var paperFormsSheet = ss.getSheetByName(SHEET_NAMES.paperForms);
   if (paperFormsSheet.getLastRow() === 0) {
     paperFormsSheet.appendRow(['year', 'term', 'docId', 'docUrl', 'createdAt', 'createdBy']);
+  }
+
+  var loginLogSheet = ss.getSheetByName(SHEET_NAMES.loginLog);
+  if (loginLogSheet.getLastRow() === 0) {
+    loginLogSheet.appendRow(['loggedInAt', 'email']);
   }
 
   cache.put(cacheKey, 'true', 21600);
@@ -908,6 +920,20 @@ function addAdmin(email) {
   }
   adminSheet.appendRow([email, 'admin', 'TRUE']);
   return { ok: true };
+}
+
+// One row per sign-in (not per API call) - the React app calls this once
+// right after Google Identity Services hands it a fresh credential, not on
+// every requireAdmin check, so this stays a login/session log rather than a
+// row per click.
+function recordLogin(email) {
+  var loginLogSheet = getSheetByName(SHEET_NAMES.loginLog);
+  loginLogSheet.appendRow([new Date(), email]);
+  return { ok: true };
+}
+
+function getLoginLogEntries() {
+  return sheetRowsAsObjects(SHEET_NAMES.loginLog).reverse();
 }
 
 function setAdminActive(email, active) {

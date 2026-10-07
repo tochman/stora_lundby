@@ -398,6 +398,19 @@ describe('purgeTermData', () => {
   });
 });
 
+describe('login log', () => {
+  it('records a row per recordLogin call and returns them newest first', () => {
+    ctx.context.recordLogin('a@example.com');
+    ctx.context.recordLogin('b@example.com');
+
+    const entries = ctx.context.getLoginLogEntries();
+
+    expect(entries).toHaveLength(2);
+    expect(entries[0].email).toBe('b@example.com');
+    expect(entries[1].email).toBe('a@example.com');
+  });
+});
+
 describe('paper form (Google Doc)', () => {
   it('returns null when none exists yet for the given year/term', () => {
     expect(ctx.context.getPaperFormRecord('2026', 'Höst')).toBeNull();
