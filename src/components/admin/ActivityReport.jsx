@@ -95,6 +95,18 @@ export default function ActivityReport({ idToken }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Defaults the checklist to the current term once config arrives, instead
+  // of listing every activity from every term ever created - that made the
+  // card grow very tall with little way to tell where it ended. Only runs
+  // once (on config's first load), so switching back to "Alla terminer"
+  // afterwards sticks.
+  useEffect(() => {
+    if (config && termFilter === 'all') {
+      setTermFilter(termKey(config.currentYear, config.currentTerm));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [config]);
+
   const toggleActivity = (id) => {
     setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
@@ -152,9 +164,7 @@ export default function ActivityReport({ idToken }) {
       <section className="card print:hidden">
         <h2 className="mb-2 text-xl font-bold text-slate-800">Pappersblankett (Google Doc)</h2>
         <p className="mb-4 text-sm text-slate-500">
-          En Google Doc i stil med den gamla pappersblanketten, för medlemmar som föredrar papper. Innehåller
-          aktuell termins aktiviteter och en QR-kod till webbformuläret. En per termin - ta bort och skapa en ny
-          version om aktiviteterna ändras.
+          För medlemmar som föredrar papper - aktuell termins aktiviteter plus en QR-kod till webbformuläret.
         </p>
         {config && (
           <>
@@ -194,8 +204,7 @@ export default function ActivityReport({ idToken }) {
           </select>
         </div>
         <p className="mb-4 text-sm text-slate-500">
-          Välj en eller flera aktiviteter. Förhandsgranskningen nedan visar exakt vad som skrivs ut -
-          klicka sedan på "Skriv ut / Spara som PDF" och välj "Spara som PDF" i skrivardialogen.
+          Välj aktiviteter - förhandsgranskningen nedan visar vad som skrivs ut.
         </p>
         <div className="grid gap-2 sm:grid-cols-2">
           {visibleActivities.map((activity) => (
