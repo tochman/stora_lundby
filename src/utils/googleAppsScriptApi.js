@@ -61,6 +61,8 @@ let mockApplications = [
 
 let mockPurgeLog = [];
 
+let mockPaperForms = [];
+
 const mockConsentLog = [
   {
     applicationId: 'demo-1',
@@ -191,6 +193,37 @@ async function mockAction(action, params) {
     case 'updateConfig':
       Object.assign(mockConfig, params.updates || {});
       return { ...mockConfig };
+    case 'getPaperForm': {
+      const year = params.year || mockConfig.currentYear;
+      const term = params.term || mockConfig.currentTerm;
+      return mockPaperForms.find((f) => f.year === year && f.term === term) || null;
+    }
+    case 'generatePaperForm': {
+      const year = params.year || mockConfig.currentYear;
+      const term = params.term || mockConfig.currentTerm;
+      if (mockPaperForms.some((f) => f.year === year && f.term === term)) {
+        throw new Error(`Det finns redan en pappersblankett för ${term} ${year}. Ta bort den först om du vill skapa en ny version.`);
+      }
+      const record = {
+        year,
+        term,
+        docId: `demo-doc-${Date.now()}`,
+        docUrl: 'https://docs.google.com/document/d/demo/edit',
+        createdAt: new Date().toISOString(),
+        createdBy: 'admin@example.com'
+      };
+      mockPaperForms = [...mockPaperForms, record];
+      return { ok: true, docUrl: record.docUrl, docId: record.docId };
+    }
+    case 'deletePaperForm': {
+      const year = params.year || mockConfig.currentYear;
+      const term = params.term || mockConfig.currentTerm;
+      if (!mockPaperForms.some((f) => f.year === year && f.term === term)) {
+        throw new Error(`Hittade ingen pappersblankett för ${term} ${year}`);
+      }
+      mockPaperForms = mockPaperForms.filter((f) => !(f.year === year && f.term === term));
+      return { ok: true };
+    }
     case 'batch': {
       const results = [];
       for (const request of params.requests || []) {
@@ -214,8 +247,11 @@ async function mockAction(action, params) {
 // idempotent (upsert/set-style, or already keyed so a duplicate attempt
 // just overwrites the same record). Deliberately excludes
 // createManualApplication, upsertActivity (a brand-new activity with no id
-// gets a fresh server-generated id each call) and copyActivities - each of
-// those can create a genuine duplicate if the first attempt actually
+// gets a fresh server-generated id each call), copyActivities,
+// generatePaperForm (creates a brand-new Doc each call - a lost-response
+// retry would leave an orphaned duplicate doc) and deletePaperForm (kept
+// off the list for the same reason as deleteActivity) - each of those can
+// create or hit a genuine inconsistency if the first attempt actually
 // succeeded and only the response was lost.
 // 'batch' is included too - every call site in this app only ever bundles
 // actions already on this list (see the load() functions in
@@ -227,7 +263,7 @@ const RETRY_SAFE_ACTIONS = new Set([
   'getActivities', 'getActivitiesAdmin', 'getConfig', 'getApplications',
   'getAdminSummary', 'getConsentLog', 'getAdmins', 'getPurgeLog',
   'submitApplication', 'updateApplicationStatus', 'updateApplicationNotes',
-  'setAdminActive', 'addAdmin', 'purgeTermData', 'batch'
+  'setAdminActive', 'addAdmin', 'purgeTermData', 'batch', 'getPaperForm'
 ]);
 const RETRY_ATTEMPTS = 2;
 const RETRY_DELAY_MS = 800;
@@ -335,7 +371,11 @@ export const api = {
   upsertActivity: (activity, idToken) => callAppsScript('upsertActivity', { activity, idToken }),
   deleteActivity: (id, idToken) => callAppsScript('deleteActivity', { id, idToken }),
   copyActivities: (fromYear, fromTerm, toYear, toTerm, idToken) =>
-    callAppsScript('copyActivities', { fromYear, fromTerm, toYear, toTerm, idToken })
+    callAppsScript('copyActivities', { fromYear, fromTerm, toYear, toTerm, idToken }),
+
+  getPaperForm: (year, term, idToken) => callAppsScript('getPaperForm', { year, term, idToken }),
+  generatePaperForm: (year, term, idToken) => callAppsScript('generatePaperForm', { year, term, idToken }),
+  deletePaperForm: (year, term, idToken) => callAppsScript('deletePaperForm', { year, term, idToken })
 };
 
 export default api;

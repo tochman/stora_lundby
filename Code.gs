@@ -12,7 +12,8 @@ var SHEET_NAMES = {
   config: 'Config',
   admins: 'Admins',
   activities: 'Activities',
-  purgeLog: 'PurgeLog'
+  purgeLog: 'PurgeLog',
+  paperForms: 'PaperForms'
 };
 
 var DEFAULT_ACTIVITIES = [
@@ -138,6 +139,15 @@ function handleAction(action, params) {
     case 'copyActivities':
       requireAdmin(params);
       return copyActivities(params.fromYear, params.fromTerm, params.toYear, params.toTerm);
+    case 'getPaperForm':
+      requireAdmin(params);
+      return getPaperFormRecord(params.year, params.term);
+    case 'generatePaperForm':
+      var generatingAdmin = requireAdmin(params);
+      return generatePaperForm(params.year, params.term, generatingAdmin);
+    case 'deletePaperForm':
+      requireAdmin(params);
+      return deletePaperForm(params.year, params.term);
     default:
       throw new Error('Okänd åtgärd: ' + action);
   }
@@ -272,6 +282,10 @@ function initializeProject() {
     configSheet.appendRow(['consentText', 'Jag godkänner att Stora Lundby sparar mina uppgifter för att hantera anmälan och kontakta mig i samband med verksamheten.']);
     configSheet.appendRow(['retentionPeriodMonths', '24']);
     configSheet.appendRow(['adminEmailDomain', 'storalundby.se']);
+    // Encoded into the QR code embedded in a generated paper form (see
+    // generatePaperForm) - a Config row rather than a hardcoded constant so
+    // it can be updated (e.g. to a custom domain) without a code deploy.
+    configSheet.appendRow(['publicFormUrl', 'https://stora-lundby.netlify.app/']);
   }
 
   if (adminSheet.getLastRow() === 0) {
@@ -289,6 +303,11 @@ function initializeProject() {
 
   if (purgeLogSheet.getLastRow() === 0) {
     purgeLogSheet.appendRow(['purgedAt', 'purgedBy', 'year', 'term', 'applicationsPurged', 'consentLogPurged']);
+  }
+
+  var paperFormsSheet = ss.getSheetByName(SHEET_NAMES.paperForms);
+  if (paperFormsSheet.getLastRow() === 0) {
+    paperFormsSheet.appendRow(['year', 'term', 'docId', 'docUrl', 'createdAt', 'createdBy']);
   }
 
   cache.put('projectInitialized', 'true', 21600);
@@ -919,6 +938,192 @@ function setAdminActive(email, active) {
     }
   }
   throw new Error('Hittade ingen admin med e-post ' + email);
+}
+
+// ---------------------------------------------------------------------------
+// Paper form (Google Doc) - some members prefer a printed sign-up sheet
+// over the web form. Generates a Google Doc styled after the legacy paper
+// flyer, populated with the given term's actual activities, and keeps a
+// record of the link so the admin UI can show "already exists" instead of
+// silently creating duplicates. One doc per (year, term); delete the
+// existing one first to regenerate after activities change.
+// ---------------------------------------------------------------------------
+
+var SWEDISH_MONTHS = [
+  'januari', 'februari', 'mars', 'april', 'maj', 'juni',
+  'juli', 'augusti', 'september', 'oktober', 'november', 'december'
+];
+
+function formatDocDate(isoDate) {
+  if (!isoDate) return '';
+  var parts = String(isoDate).split('T')[0].split('-').map(Number);
+  var year = parts[0], month = parts[1], day = parts[2];
+  if (!year || !month || !day) return String(isoDate);
+  return day + ' ' + SWEDISH_MONTHS[month - 1];
+}
+
+function formatActivityLineForDoc(activity) {
+  var when = [
+    formatDocDate(activity.date),
+    activity.startTime && activity.endTime ? 'kl ' + activity.startTime + '-' + activity.endTime : ''
+  ].filter(function (part) { return part; }).join(', ');
+  var parts = [activity.label];
+  if (activity.location) parts.push(activity.location);
+  var line = parts.join(', ');
+  return when ? when + ', ' + line : line;
+}
+
+function getPaperFormRecord(year, term) {
+  year = year || getConfigValue('currentYear', '2026');
+  term = term || getConfigValue('currentTerm', 'Höst');
+
+  var rows = sheetRowsAsObjects(SHEET_NAMES.paperForms);
+  for (var i = 0; i < rows.length; i += 1) {
+    if (String(rows[i].year) === String(year) && String(rows[i].term) === String(term)) {
+      return rows[i];
+    }
+  }
+  return null;
+}
+
+// Best-effort: a generated doc without the QR code is still useful (it's
+// the whole sign-up sheet, the QR is a convenience shortcut), so a failure
+// fetching it from the external QR service shouldn't block doc creation.
+function fetchQrCodeBlob(url) {
+  try {
+    var qrUrl = 'https://api.qrserver.com/v1/create-qr-code/?size=300x300&margin=10&color=4-58-99&data=' + encodeURIComponent(url);
+    var response = UrlFetchApp.fetch(qrUrl, { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return null;
+    return response.getBlob().setName('qr.png');
+  } catch (error) {
+    console.warn('Kunde inte hämta QR-kod: ' + error.message);
+    return null;
+  }
+}
+
+function generatePaperForm(year, term, createdBy) {
+  year = year || getConfigValue('currentYear', '2026');
+  term = term || getConfigValue('currentTerm', 'Höst');
+
+  if (getPaperFormRecord(year, term)) {
+    throw new Error('Det finns redan en pappersblankett för ' + term + ' ' + year + '. Ta bort den först om du vill skapa en ny version.');
+  }
+
+  var deadline = getConfigValue('submissionDeadline', '');
+  var publicFormUrl = getConfigValue('publicFormUrl', 'https://stora-lundby.netlify.app/');
+  var allActivities = getActivities(year, term);
+  var signupActivities = allActivities.filter(function (a) { return a.category !== 'standing-role'; });
+  var standingRoles = allActivities.filter(function (a) { return a.category === 'standing-role'; });
+
+  var doc = DocumentApp.create('Föräldralapp ' + term + ' ' + year);
+  var body = doc.getBody();
+  body.setMarginTop(40).setMarginBottom(40).setMarginLeft(56).setMarginRight(56);
+
+  body.appendParagraph('STORA LUNDBY SCOUTKÅR').editAsText().setBold(true).setFontSize(11);
+  body.appendParagraph('Vi behöver din hjälp!').setHeading(DocumentApp.ParagraphHeading.TITLE);
+
+  body.appendParagraph(
+    'Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en ' +
+    'partipolitiskt och religiöst obunden organisation. Om vi ska kunna fortsätta att ha en scoutkår så behöver ' +
+    'vi hjälp av er scoutföräldrar med vissa aktiviteter.'
+  );
+  body.appendParagraph('Du som förälder förväntas hjälpa till vid minst ett, gärna två tillfällen varje termin. Det handlar om att:')
+    .editAsText().setBold(true);
+
+  [
+    'Få inkomster från marknader på Mjörnbotorget och från annan försäljning. Här behövs det dels skänkta vinster ' +
+      'till lotteri, men också praktisk hjälp att samordna marknadsståndet, tre marknader per år.',
+    'Sköta om scoutlokalerna Scoutgården och Ljungslätt med reparationer, städning etc.',
+    'Ibland behöver vi också praktisk hjälp för en enstaka insats. Det kommer vi att efterlysa i månadsbreven ' +
+      'som vi skickar ut.'
+  ].forEach(function (text) {
+    body.appendListItem(text).setGlyphType(DocumentApp.GlyphType.BULLET);
+  });
+
+  body.appendParagraph('Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!');
+  body.appendParagraph('Styrelsen i Stora Lundby Scoutkår').editAsText().setItalic(true);
+
+  body.appendHorizontalRule();
+
+  body.appendParagraph(term + ' ' + year).setHeading(DocumentApp.ParagraphHeading.HEADING1);
+
+  if (deadline) {
+    var deadlineText = body.appendParagraph('Lämnas till scoutledare senast ' + deadline).editAsText();
+    deadlineText.setBold(true).setForegroundColor('#B3005E');
+  }
+
+  // Scan to sign up digitally instead - placed early since it's the single
+  // most useful shortcut for a reader skimming a printed page.
+  var qrBlob = fetchQrCodeBlob(publicFormUrl);
+  if (qrBlob) {
+    var qrImage = body.appendImage(qrBlob);
+    qrImage.setWidth(120).setHeight(120);
+    body.appendParagraph('Eller skanna QR-koden för att anmäla dig digitalt: ' + publicFormUrl)
+      .editAsText().setFontSize(9).setForegroundColor('#64748b');
+  }
+
+  body.appendParagraph('Kryssa i vad du kan hjälpa till med:').editAsText().setBold(true);
+  signupActivities.forEach(function (activity) {
+    body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+  });
+
+  if (standingRoles.length > 0) {
+    body.appendParagraph('Jag kan ställa upp till följande:').editAsText().setBold(true);
+    standingRoles.forEach(function (activity) {
+      var label = activity.id === 'own-suggestion' ? activity.label + ':' : activity.label;
+      body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+    });
+  }
+
+  body.appendParagraph('');
+  body.appendParagraph('Uppgifter om mig som vårdnadshavare:').editAsText().setBold(true);
+  body.appendParagraph('Namn ________________________________________________________');
+  body.appendParagraph('Telefon ________________________________________________');
+  body.appendParagraph('E-post ________________________________________________________');
+
+  body.appendParagraph('');
+  body.appendParagraph('Jag är vårdnadshavare till följande scout:').editAsText().setBold(true);
+  body.appendParagraph('Namn ________________________________________________________');
+  body.appendParagraph('Avdelning ________________________________________________________');
+
+  doc.saveAndClose();
+
+  var file = DriveApp.getFileById(doc.getId());
+  // Printed/handed-out docs are meant to be openable by anyone holding the
+  // link (an admin without edit access, or a parent asking to see it) -
+  // view-only, not editable by just anyone with the URL.
+  file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+
+  var docUrl = file.getUrl();
+  getSheetByName(SHEET_NAMES.paperForms).appendRow([year, term, doc.getId(), docUrl, new Date(), createdBy || '']);
+
+  return { ok: true, docUrl: docUrl, docId: doc.getId() };
+}
+
+function deletePaperForm(year, term) {
+  year = year || getConfigValue('currentYear', '2026');
+  term = term || getConfigValue('currentTerm', 'Höst');
+
+  var sheet = getSheetByName(SHEET_NAMES.paperForms);
+  var values = sheet.getDataRange().getValues();
+  var headers = values[0];
+  var yearCol = headers.indexOf('year');
+  var termCol = headers.indexOf('term');
+  var docIdCol = headers.indexOf('docId');
+
+  for (var i = 1; i < values.length; i += 1) {
+    if (String(values[i][yearCol]) === String(year) && String(values[i][termCol]) === String(term)) {
+      var docId = values[i][docIdCol];
+      try {
+        DriveApp.getFileById(docId).setTrashed(true);
+      } catch (error) {
+        console.warn('Kunde inte flytta dokumentet till papperskorgen: ' + error.message);
+      }
+      sheet.deleteRow(i + 1);
+      return { ok: true };
+    }
+  }
+  throw new Error('Hittade ingen pappersblankett för ' + term + ' ' + year);
 }
 
 // ---------------------------------------------------------------------------

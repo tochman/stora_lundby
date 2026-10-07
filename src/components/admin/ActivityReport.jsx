@@ -22,29 +22,71 @@ function formatActivityWhen(activity) {
 export default function ActivityReport({ idToken }) {
   const [activities, setActivities] = useState([]);
   const [applications, setApplications] = useState([]);
+  const [config, setConfig] = useState(null);
+  const [paperForm, setPaperForm] = useState(null);
   const [selectedIds, setSelectedIds] = useState([]);
   const [termFilter, setTermFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [hasLoaded, setHasLoaded] = useState(false);
   const [error, setError] = useState('');
+  const [formNotice, setFormNotice] = useState('');
+  const [generatingForm, setGeneratingForm] = useState(false);
+  const [deletingForm, setDeletingForm] = useState(false);
 
   const load = async () => {
     try {
       setLoading(true);
       const results = await api.batch([
         { action: 'getActivitiesAdmin', params: { idToken } },
-        { action: 'getApplications', params: { idToken } }
+        { action: 'getApplications', params: { idToken } },
+        { action: 'getConfig', params: {} },
+        { action: 'getPaperForm', params: { idToken } }
       ]);
       const activityList = unwrapBatchResult(results, 0, 'hämtning av aktiviteter');
       const apps = unwrapBatchResult(results, 1, 'hämtning av anmälningar');
+      const publicConfig = unwrapBatchResult(results, 2, 'hämtning av inställningar');
+      const existingPaperForm = unwrapBatchResult(results, 3, 'hämtning av pappersblankett');
       setActivities([...activityList].sort((a, b) => a.sortOrder - b.sortOrder));
       setApplications(apps || []);
+      setConfig(publicConfig);
+      setPaperForm(existingPaperForm);
       setError('');
       setHasLoaded(true);
     } catch (err) {
       setError(err.message || 'Kunde inte ladda data.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const generatePaperForm = async () => {
+    if (generatingForm || !config) return;
+    try {
+      setGeneratingForm(true);
+      setFormNotice('');
+      const result = await api.generatePaperForm(config.currentYear, config.currentTerm, idToken);
+      setPaperForm({ year: config.currentYear, term: config.currentTerm, docUrl: result.docUrl, docId: result.docId });
+      setFormNotice('Pappersblanketten har skapats.');
+    } catch (err) {
+      setError(err.message || 'Kunde inte skapa pappersblanketten.');
+    } finally {
+      setGeneratingForm(false);
+    }
+  };
+
+  const deletePaperForm = async () => {
+    if (deletingForm || !config) return;
+    if (!window.confirm('Ta bort den aktuella pappersblanketten? Du kan skapa en ny direkt efteråt.')) return;
+    try {
+      setDeletingForm(true);
+      setFormNotice('');
+      await api.deletePaperForm(config.currentYear, config.currentTerm, idToken);
+      setPaperForm(null);
+      setFormNotice('Pappersblanketten togs bort.');
+    } catch (err) {
+      setError(err.message || 'Kunde inte ta bort pappersblanketten.');
+    } finally {
+      setDeletingForm(false);
     }
   };
 
@@ -106,6 +148,40 @@ export default function ActivityReport({ idToken }) {
   return (
     <div className="space-y-6">
       {error && <div className="print:hidden"><ErrorBanner message={error} onRetry={load} /></div>}
+
+      <section className="card print:hidden">
+        <h2 className="mb-2 text-xl font-bold text-slate-800">Pappersblankett (Google Doc)</h2>
+        <p className="mb-4 text-sm text-slate-500">
+          En Google Doc i stil med den gamla pappersblanketten, för medlemmar som föredrar papper. Innehåller
+          aktuell termins aktiviteter och en QR-kod till webbformuläret. En per termin - ta bort och skapa en ny
+          version om aktiviteterna ändras.
+        </p>
+        {config && (
+          <>
+            <p className="mb-3 text-sm font-semibold text-slate-700">{config.currentTerm} {config.currentYear}</p>
+            {paperForm ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <a href={paperForm.docUrl} target="_blank" rel="noreferrer" className="btn btn-secondary">
+                  Öppna pappersblankett
+                </a>
+                <button
+                  type="button"
+                  className="text-sm font-semibold text-red-600 hover:underline disabled:opacity-50"
+                  disabled={deletingForm}
+                  onClick={deletePaperForm}
+                >
+                  {deletingForm ? 'Tar bort...' : 'Ta bort'}
+                </button>
+              </div>
+            ) : (
+              <button type="button" className="btn btn-primary" disabled={generatingForm} onClick={generatePaperForm}>
+                {generatingForm ? 'Skapar...' : 'Skapa pappersblankett'}
+              </button>
+            )}
+            {formNotice && <p className="mt-3 text-sm text-green-700">{formNotice}</p>}
+          </>
+        )}
+      </section>
 
       <section className="card print:hidden">
         <div className="mb-2 flex flex-wrap items-center justify-between gap-3">

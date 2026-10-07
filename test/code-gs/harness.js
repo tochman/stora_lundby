@@ -92,6 +92,64 @@ class FakeSpreadsheet {
   }
 }
 
+// Minimal DocumentApp/DriveApp stand-ins - just enough surface for
+// generatePaperForm to run end to end and for tests to assert on what was
+// written (paragraph/list text, image presence, sharing, trashing), not a
+// faithful recreation of the full Docs/Drive API.
+class FakeText {
+  setBold() { return this; }
+  setItalic() { return this; }
+  setFontSize() { return this; }
+  setForegroundColor() { return this; }
+}
+
+class FakeParagraph {
+  constructor(text) { this.text = text; this.heading = null; }
+  setHeading(heading) { this.heading = heading; return this; }
+  editAsText() { return new FakeText(); }
+}
+
+class FakeListItem {
+  constructor(text) { this.text = text; this.glyphType = null; }
+  setGlyphType(glyphType) { this.glyphType = glyphType; return this; }
+  editAsText() { return new FakeText(); }
+}
+
+class FakeImage {
+  setWidth(width) { this.width = width; return this; }
+  setHeight(height) { this.height = height; return this; }
+}
+
+class FakeBody {
+  constructor() {
+    this.paragraphs = [];
+    this.listItems = [];
+    this.images = [];
+  }
+  setMarginTop() { return this; }
+  setMarginBottom() { return this; }
+  setMarginLeft() { return this; }
+  setMarginRight() { return this; }
+  appendParagraph(text) { const p = new FakeParagraph(text); this.paragraphs.push(p); return p; }
+  appendListItem(text) { const li = new FakeListItem(text); this.listItems.push(li); return li; }
+  appendHorizontalRule() { this.paragraphs.push(new FakeParagraph('---')); return {}; }
+  appendImage(blob) { const img = new FakeImage(); img.blob = blob; this.images.push(img); return img; }
+}
+
+class FakeDoc {
+  constructor(name, id) { this.name = name; this.id = id; this.body = new FakeBody(); this.saved = false; }
+  getBody() { return this.body; }
+  getId() { return this.id; }
+  saveAndClose() { this.saved = true; }
+}
+
+class FakeDriveFile {
+  constructor(id) { this.id = id; this.trashed = false; this.sharing = null; }
+  setSharing(access, permission) { this.sharing = { access, permission }; return this; }
+  setTrashed(value) { this.trashed = value; return this; }
+  getUrl() { return 'https://docs.google.com/document/d/' + this.id + '/edit'; }
+}
+
 export function createCodeGsContext() {
   const spreadsheet = new FakeSpreadsheet();
   const scriptProperties = new Map([['SPREADSHEET_ID', 'fake-id']]);
@@ -100,9 +158,30 @@ export function createCodeGsContext() {
   // before calling requireAdmin/verifyGoogleIdToken.
   const tokenInfo = { email: 'admin@storalundby.se', email_verified: 'true', aud: 'test-client' };
   const urlFetchCalls = { count: 0 };
+  const docs = new Map();
+  const driveFiles = new Map();
+  let docIdCounter = 0;
 
   const context = {
     console,
+    DocumentApp: {
+      create: (name) => {
+        docIdCounter += 1;
+        const doc = new FakeDoc(name, `doc-${docIdCounter}`);
+        docs.set(doc.id, doc);
+        return doc;
+      },
+      ParagraphHeading: { NORMAL: 'NORMAL', TITLE: 'TITLE', SUBTITLE: 'SUBTITLE', HEADING1: 'HEADING1' },
+      GlyphType: { BULLET: 'BULLET', HOLLOW_BULLET: 'HOLLOW_BULLET' }
+    },
+    DriveApp: {
+      getFileById: (id) => {
+        if (!driveFiles.has(id)) driveFiles.set(id, new FakeDriveFile(id));
+        return driveFiles.get(id);
+      },
+      Access: { ANYONE_WITH_LINK: 'ANYONE_WITH_LINK' },
+      Permission: { VIEW: 'VIEW' }
+    },
     PropertiesService: {
       getScriptProperties: () => ({
         getProperty: (key) => (scriptProperties.has(key) ? scriptProperties.get(key) : null),
@@ -138,8 +217,14 @@ export function createCodeGsContext() {
       sendEmail: (options) => sentEmails.push(options)
     },
     UrlFetchApp: {
-      fetch: () => {
+      fetch: (url) => {
         urlFetchCalls.count += 1;
+        if (String(url).indexOf('qrserver.com') !== -1) {
+          return {
+            getResponseCode: () => 200,
+            getBlob: () => ({ setName: (name) => ({ name }) })
+          };
+        }
         return {
           getResponseCode: () => 200,
           getContentText: () => JSON.stringify(tokenInfo)
@@ -168,5 +253,5 @@ export function createCodeGsContext() {
   // with *this* context's Date constructor, not the host realm's.
   context.__makeDate = vm.runInContext('(function (iso) { return new Date(iso); })', context);
 
-  return { context, spreadsheet, sentEmails, tokenInfo, urlFetchCalls };
+  return { context, spreadsheet, sentEmails, tokenInfo, urlFetchCalls, docs, driveFiles };
 }

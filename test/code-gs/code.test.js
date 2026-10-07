@@ -397,3 +397,78 @@ describe('purgeTermData', () => {
     expect(purgeLogRows[0][4]).toBe(2);
   });
 });
+
+describe('paper form (Google Doc)', () => {
+  it('returns null when none exists yet for the given year/term', () => {
+    expect(ctx.context.getPaperFormRecord('2026', 'Höst')).toBeNull();
+  });
+
+  it('generates a doc populated with the term\'s activities and records it', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    expect(result.ok).toBe(true);
+    expect(result.docUrl).toMatch(/^https:\/\/docs\.google\.com\//);
+
+    const doc = ctx.docs.get(result.docId);
+    expect(doc.saved).toBe(true);
+    // listItems mixes two things: the 3 static intro bullets (BULLET) and
+    // the term's actual checklist (HOLLOW_BULLET) - 10 Höst 2026 signup
+    // activities (gift/prep/market-shift/workday/baking) seeded by
+    // DEFAULT_ACTIVITIES, plus the 3 standing roles.
+    const checklistItems = doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET');
+    expect(checklistItems).toHaveLength(13);
+    expect(doc.body.images).toHaveLength(1); // the QR code
+
+    const record = ctx.context.getPaperFormRecord('2026', 'Höst');
+    expect(record.docId).toBe(result.docId);
+    expect(record.docUrl).toBe(result.docUrl);
+    expect(record.createdBy).toBe('admin@storalundby.se');
+  });
+
+  it('shares the created doc as view-only for anyone with the link', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const file = ctx.driveFiles.get(result.docId);
+    expect(file.sharing).toEqual({ access: 'ANYONE_WITH_LINK', permission: 'VIEW' });
+  });
+
+  it('refuses to create a second doc for the same year/term without deleting the first', () => {
+    ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    expect(() => ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se')).toThrow(/redan en pappersblankett/);
+  });
+
+  it('a different year/term gets its own independent doc', () => {
+    ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    expect(() => ctx.context.generatePaperForm('2027', 'Vår', 'admin@storalundby.se')).not.toThrow();
+    expect(ctx.context.getPaperFormRecord('2026', 'Höst')).not.toBeNull();
+    expect(ctx.context.getPaperFormRecord('2027', 'Vår')).not.toBeNull();
+  });
+
+  it('deletePaperForm trashes the Drive file and clears the record, allowing regeneration', () => {
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+
+    ctx.context.deletePaperForm('2026', 'Höst');
+
+    expect(ctx.driveFiles.get(result.docId).trashed).toBe(true);
+    expect(ctx.context.getPaperFormRecord('2026', 'Höst')).toBeNull();
+
+    // Regenerating after delete must succeed - that's the whole point.
+    expect(() => ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se')).not.toThrow();
+  });
+
+  it('deletePaperForm throws when there is nothing to delete', () => {
+    expect(() => ctx.context.deletePaperForm('2026', 'Höst')).toThrow(/Hittade ingen pappersblankett/);
+  });
+
+  it('still creates the doc if the QR fetch fails - the sign-up sheet itself is the point, the QR is a bonus', () => {
+    ctx.context.UrlFetchApp.fetch = (url) => {
+      if (String(url).indexOf('qrserver.com') !== -1) {
+        return { getResponseCode: () => 500 };
+      }
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(ctx.tokenInfo) };
+    };
+
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+    expect(doc.body.images).toHaveLength(0);
+    expect(doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET')).toHaveLength(13);
+  });
+});
