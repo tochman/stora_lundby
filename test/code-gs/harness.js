@@ -125,11 +125,31 @@ class FakeImage {
   setHeight(height) { this.height = height; return this; }
 }
 
+class FakeTableCell {
+  constructor() { this.images = []; this.paragraphs = []; }
+  appendImage(blob) { const img = new FakeImage(); img.blob = blob; this.images.push(img); return img; }
+  appendParagraph(text) { const p = new FakeParagraph(text); this.paragraphs.push(p); return p; }
+}
+
+class FakeTableRow {
+  constructor() { this.cells = []; }
+  appendTableCell() { const cell = new FakeTableCell(); this.cells.push(cell); return cell; }
+}
+
+class FakeTable {
+  constructor() { this.rows = []; this.borderWidth = null; this.columnWidths = {}; }
+  appendTableRow() { const row = new FakeTableRow(); this.rows.push(row); return row; }
+  setBorderWidth(width) { this.borderWidth = width; return this; }
+  setColumnWidth(index, width) { this.columnWidths[index] = width; return this; }
+}
+
 class FakeBody {
   constructor() {
     this.paragraphs = [];
     this.listItems = [];
     this.images = [];
+    this.tables = [];
+    this.pageBreaks = 0;
   }
   setMarginTop() { return this; }
   setMarginBottom() { return this; }
@@ -139,6 +159,8 @@ class FakeBody {
   appendListItem(text) { const li = new FakeListItem(text); this.listItems.push(li); return li; }
   appendHorizontalRule() { this.paragraphs.push(new FakeParagraph('---')); return {}; }
   appendImage(blob) { const img = new FakeImage(); img.blob = blob; this.images.push(img); return img; }
+  appendTable() { const t = new FakeTable(); this.tables.push(t); return t; }
+  appendPageBreak() { this.pageBreaks += 1; return {}; }
 }
 
 class FakeDoc {
@@ -258,7 +280,7 @@ export function createCodeGsContext() {
     UrlFetchApp: {
       fetch: (url) => {
         urlFetchCalls.count += 1;
-        if (String(url).indexOf('qrserver.com') !== -1) {
+        if (String(url).indexOf('qrserver.com') !== -1 || String(url).indexOf('lily-blue-header.png') !== -1) {
           return {
             getResponseCode: () => 200,
             getBlob: () => ({ setName: (name) => ({ name }) })

@@ -416,7 +416,17 @@ describe('paper form (Google Doc)', () => {
     // DEFAULT_ACTIVITIES, plus the 3 standing roles.
     const checklistItems = doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET');
     expect(checklistItems).toHaveLength(13);
-    expect(doc.body.images).toHaveLength(1); // the QR code
+
+    // Logo and QR live side by side in a borderless header table, not as
+    // standalone body-level images.
+    expect(doc.body.tables).toHaveLength(1);
+    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    expect(brandCell.images).toHaveLength(1); // the logo
+    expect(qrCell.images).toHaveLength(1); // the QR code
+
+    // The letter (page 1) and the form itself (page 2) are deliberately
+    // split, so the checklist's length never affects the letter's layout.
+    expect(doc.body.pageBreaks).toBe(1);
 
     const record = ctx.context.getPaperFormRecord('2026', 'Höst');
     expect(record.docId).toBe(result.docId);
@@ -463,13 +473,36 @@ describe('paper form (Google Doc)', () => {
       if (String(url).indexOf('qrserver.com') !== -1) {
         return { getResponseCode: () => 500 };
       }
+      if (String(url).indexOf('lily-blue-header.png') !== -1) {
+        return { getResponseCode: () => 200, getBlob: () => ({ setName: (name) => ({ name }) }) };
+      }
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify(ctx.tokenInfo) };
     };
 
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const doc = ctx.docs.get(result.docId);
-    expect(doc.body.images).toHaveLength(0);
+    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    expect(brandCell.images).toHaveLength(1); // logo still fetched fine
+    expect(qrCell.images).toHaveLength(0); // QR fetch failed - no image, no crash
     expect(doc.body.listItems.filter((li) => li.glyphType === 'HOLLOW_BULLET')).toHaveLength(13);
+  });
+
+  it('still creates the doc if the logo fetch fails - the bold org name text carries on its own', () => {
+    ctx.context.UrlFetchApp.fetch = (url) => {
+      if (String(url).indexOf('lily-blue-header.png') !== -1) {
+        return { getResponseCode: () => 500 };
+      }
+      if (String(url).indexOf('qrserver.com') !== -1) {
+        return { getResponseCode: () => 200, getBlob: () => ({ setName: (name) => ({ name }) }) };
+      }
+      return { getResponseCode: () => 200, getContentText: () => JSON.stringify(ctx.tokenInfo) };
+    };
+
+    const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
+    const doc = ctx.docs.get(result.docId);
+    const [brandCell, qrCell] = doc.body.tables[0].rows[0].cells;
+    expect(brandCell.images).toHaveLength(0); // logo fetch failed - no image, no crash
+    expect(qrCell.images).toHaveLength(1);
   });
 
   it('moves the generated doc into the spreadsheet\'s parent folder, when it has one', () => {

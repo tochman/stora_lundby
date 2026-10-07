@@ -1031,6 +1031,23 @@ function fetchQrCodeBlob(url) {
   }
 }
 
+// Same best-effort pattern as fetchQrCodeBlob - a missing logo still leaves
+// a usable form (the bold "STORA LUNDBY SCOUTKÅR" text carries on its own).
+// Served from the public site rather than inlined as base64 in Code.gs, so
+// swapping the logo later is a file replace, not a source edit.
+function fetchLogoBlob() {
+  try {
+    var publicFormUrl = getConfigValue('publicFormUrl', 'https://stora-lundby.netlify.app/');
+    var base = String(publicFormUrl).replace(/\/+$/, '');
+    var response = UrlFetchApp.fetch(base + '/lily-blue-header.png', { muteHttpExceptions: true });
+    if (response.getResponseCode() !== 200) return null;
+    return response.getBlob().setName('logo.png');
+  } catch (error) {
+    console.warn('Kunde inte hämta logotypen: ' + error.message);
+    return null;
+  }
+}
+
 function generatePaperForm(year, term, createdBy) {
   year = year || getConfigValue('currentYear', '2026');
   term = term || getConfigValue('currentTerm', 'Höst');
@@ -1049,16 +1066,46 @@ function generatePaperForm(year, term, createdBy) {
   var body = doc.getBody();
   body.setMarginTop(40).setMarginBottom(40).setMarginLeft(56).setMarginRight(56);
 
-  body.appendParagraph('STORA LUNDBY SCOUTKÅR').editAsText().setBold(true).setFontSize(11);
+  // Header: logo + org name on the left, the sign-up QR code on the right,
+  // side by side in a borderless table rather than each on its own
+  // full-width line - keeps the QR from interrupting the letter's flow and
+  // gives it an obvious, consistent "corner badge" home instead.
+  var headerTable = body.appendTable();
+  headerTable.setBorderWidth(0);
+  var headerRow = headerTable.appendTableRow();
+  var brandCell = headerRow.appendTableCell();
+  var qrCell = headerRow.appendTableCell();
+
+  var logoBlob = fetchLogoBlob();
+  if (logoBlob) {
+    brandCell.appendImage(logoBlob).setWidth(26).setHeight(26);
+  }
+  brandCell.appendParagraph('STORA LUNDBY SCOUTKÅR').editAsText().setBold(true).setFontSize(12);
+
+  var qrBlob = fetchQrCodeBlob(publicFormUrl);
+  if (qrBlob) {
+    qrCell.appendImage(qrBlob).setWidth(56).setHeight(56);
+    qrCell.appendParagraph('Skanna för att anmäla digitalt').editAsText().setFontSize(7).setForegroundColor('#64748b');
+  }
+  headerTable.setColumnWidth(0, 380);
+  headerTable.setColumnWidth(1, 110);
+
+  // Page 1 is the letter - context, expectations, the invitation to pitch
+  // in with other ideas. Page 2 is the actual form to fill in. Splitting
+  // them deliberately (rather than fighting to cram everything onto one
+  // page) means page 2's length can flex with however many activities a
+  // given term has without ever squeezing the letter's font size down to
+  // compensate - and leaves the letter unchanged by that resize whenever it
+  // does change.
   body.appendParagraph('Vi behöver din hjälp!').setHeading(DocumentApp.ParagraphHeading.TITLE);
 
   body.appendParagraph(
     'Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en ' +
     'partipolitiskt och religiöst obunden organisation. Om vi ska kunna fortsätta att ha en scoutkår så behöver ' +
     'vi hjälp av er scoutföräldrar med vissa aktiviteter.'
-  );
+  ).editAsText().setFontSize(11);
   body.appendParagraph('Du som förälder förväntas hjälpa till vid minst ett, gärna två tillfällen varje termin. Det handlar om att:')
-    .editAsText().setBold(true);
+    .editAsText().setBold(true).setFontSize(11);
 
   [
     'Få inkomster från marknader på Mjörnbotorget och från annan försäljning. Här behövs det dels skänkta vinster ' +
@@ -1067,54 +1114,45 @@ function generatePaperForm(year, term, createdBy) {
     'Ibland behöver vi också praktisk hjälp för en enstaka insats. Det kommer vi att efterlysa i månadsbreven ' +
       'som vi skickar ut.'
   ].forEach(function (text) {
-    body.appendListItem(text).setGlyphType(DocumentApp.GlyphType.BULLET);
+    body.appendListItem(text).setGlyphType(DocumentApp.GlyphType.BULLET).editAsText().setFontSize(11);
   });
 
-  body.appendParagraph('Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!');
-  body.appendParagraph('Styrelsen i Stora Lundby Scoutkår').editAsText().setItalic(true);
+  body.appendParagraph('Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!')
+    .editAsText().setFontSize(11);
+  body.appendParagraph('Styrelsen i Stora Lundby Scoutkår').editAsText().setItalic(true).setFontSize(11);
 
-  body.appendHorizontalRule();
+  body.appendPageBreak();
 
   body.appendParagraph(term + ' ' + year).setHeading(DocumentApp.ParagraphHeading.HEADING1);
 
   if (deadline) {
     var deadlineText = body.appendParagraph('Lämnas till scoutledare senast ' + deadline).editAsText();
-    deadlineText.setBold(true).setForegroundColor('#B3005E');
+    deadlineText.setBold(true).setFontSize(12).setForegroundColor('#B3005E');
   }
 
-  // Scan to sign up digitally instead - placed early since it's the single
-  // most useful shortcut for a reader skimming a printed page.
-  var qrBlob = fetchQrCodeBlob(publicFormUrl);
-  if (qrBlob) {
-    var qrImage = body.appendImage(qrBlob);
-    qrImage.setWidth(120).setHeight(120);
-    body.appendParagraph('Eller skanna QR-koden för att anmäla dig digitalt: ' + publicFormUrl)
-      .editAsText().setFontSize(9).setForegroundColor('#64748b');
-  }
-
-  body.appendParagraph('Kryssa i vad du kan hjälpa till med:').editAsText().setBold(true);
+  body.appendParagraph('Kryssa i vad du kan hjälpa till med:').editAsText().setBold(true).setFontSize(12);
   signupActivities.forEach(function (activity) {
-    body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+    body.appendListItem(formatActivityLineForDoc(activity)).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).editAsText().setFontSize(12);
   });
 
   if (standingRoles.length > 0) {
-    body.appendParagraph('Jag kan ställa upp till följande:').editAsText().setBold(true);
+    body.appendParagraph('Jag kan ställa upp till följande:').editAsText().setBold(true).setFontSize(12);
     standingRoles.forEach(function (activity) {
       var label = activity.id === 'own-suggestion' ? activity.label + ':' : activity.label;
-      body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET);
+      body.appendListItem(label).setGlyphType(DocumentApp.GlyphType.HOLLOW_BULLET).editAsText().setFontSize(12);
     });
   }
 
   body.appendParagraph('');
-  body.appendParagraph('Uppgifter om mig som vårdnadshavare:').editAsText().setBold(true);
-  body.appendParagraph('Namn ________________________________________________________');
-  body.appendParagraph('Telefon ________________________________________________');
-  body.appendParagraph('E-post ________________________________________________________');
+  body.appendParagraph('Uppgifter om mig som vårdnadshavare:').editAsText().setBold(true).setFontSize(12);
+  body.appendParagraph('Namn ________________________________________________________').editAsText().setFontSize(12);
+  body.appendParagraph('Telefon ________________________________________________').editAsText().setFontSize(12);
+  body.appendParagraph('E-post ________________________________________________________').editAsText().setFontSize(12);
 
   body.appendParagraph('');
-  body.appendParagraph('Jag är vårdnadshavare till följande scout:').editAsText().setBold(true);
-  body.appendParagraph('Namn ________________________________________________________');
-  body.appendParagraph('Avdelning ________________________________________________________');
+  body.appendParagraph('Jag är vårdnadshavare till följande scout:').editAsText().setBold(true).setFontSize(12);
+  body.appendParagraph('Namn ________________________________________________________').editAsText().setFontSize(12);
+  body.appendParagraph('Avdelning ________________________________________________________').editAsText().setFontSize(12);
 
   doc.saveAndClose();
 
