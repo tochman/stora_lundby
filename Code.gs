@@ -1032,14 +1032,19 @@ function fetchQrCodeBlob(url) {
 }
 
 // Same best-effort pattern as fetchQrCodeBlob - a missing logo still leaves
-// a usable form (the bold "STORA LUNDBY SCOUTKÅR" text carries on its own).
-// Served from the public site rather than inlined as base64 in Code.gs, so
-// swapping the logo later is a file replace, not a source edit.
+// a usable form, just without the wordmark image. Served from the public
+// site rather than inlined as base64 in Code.gs, so swapping the logo later
+// is a file replace, not a source edit. This is the full "STORA LUNDBY
+// [lily] SCOUTKÅR" lockup as one pre-rendered image (public/sl_logo.png) -
+// the troop's actual branded wordmark isn't a font Docs can load (it's a
+// licensed Scouterna asset, not a published Google Font), so using the
+// finished graphic as-is, the same way other Stora Lundby documents do,
+// beats approximating it with a substitute font.
 function fetchLogoBlob() {
   try {
     var publicFormUrl = getConfigValue('publicFormUrl', 'https://stora-lundby.netlify.app/');
     var base = String(publicFormUrl).replace(/\/+$/, '');
-    var response = UrlFetchApp.fetch(base + '/lily-blue-header.png', { muteHttpExceptions: true });
+    var response = UrlFetchApp.fetch(base + '/sl_logo.png', { muteHttpExceptions: true });
     if (response.getResponseCode() !== 200) return null;
     return response.getBlob().setName('logo.png');
   } catch (error) {
@@ -1075,7 +1080,6 @@ function generatePaperForm(year, term, createdBy) {
   // and the deadline line) and never back OFF, so both silently carried
   // through every single thing that came after them for the rest of the
   // page.
-  var BRAND_BLUE = '#043a63';
   var ACCENT_PINK = '#b3005e';
   var MUTED_GRAY = '#64748b';
   var INK = '#1f2937';
@@ -1106,16 +1110,15 @@ function generatePaperForm(year, term, createdBy) {
   var brandCell = headerRow.appendTableCell();
   var qrCell = headerRow.appendTableCell();
 
+  // The full "STORA LUNDBY [lily] SCOUTKÅR" lockup as one image (see
+  // fetchLogoBlob) rather than a separate icon plus an approximated font -
+  // sl_logo.png is already the troop's real wordmark at a fixed 1030:126
+  // aspect ratio, so this is the exact graphic other Stora Lundby documents
+  // use, not a substitute.
   var logoBlob = fetchLogoBlob();
   if (logoBlob) {
-    brandCell.appendImage(logoBlob).setWidth(30).setHeight(30);
+    brandCell.appendImage(logoBlob).setWidth(200).setHeight(24.5);
   }
-  // Poppins approximates the app's rounded ScouternaRoundedPro wordmark
-  // reasonably well - Docs can't load that font itself (it's a licensed
-  // Scouterna asset, not a published Google Font), so this is the closest
-  // practical substitute rather than the real thing.
-  styleText(brandCell.appendParagraph('STORA LUNDBY SCOUTKÅR'), { bold: true, color: BRAND_BLUE, size: 13, font: 'Poppins' })
-    .setSpacingBefore(4);
 
   var qrBlob = fetchQrCodeBlob(publicFormUrl);
   if (qrBlob) {

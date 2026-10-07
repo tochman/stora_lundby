@@ -474,14 +474,17 @@ describe('paper form (Google Doc)', () => {
     });
   });
 
-  it('styles the header wordmark in the brand color with a specific font, independent of the logo fetch', () => {
+  it('embeds the full wordmark lockup as one image, sized to its real aspect ratio', () => {
+    // sl_logo.png is the troop's actual "STORA LUNDBY [lily] SCOUTKÅR"
+    // graphic (1030x126) - not a font substitute, so there's no text style
+    // to assert on here, just that the image is placed and proportioned
+    // correctly (8.17:1, matching 1030/126).
     const result = ctx.context.generatePaperForm('2026', 'Höst', 'admin@storalundby.se');
     const doc = ctx.docs.get(result.docId);
     const brandCell = doc.body.tables[0].rows[0].cells[0];
-    const wordmark = brandCell.paragraphs.find((p) => p.text === 'STORA LUNDBY SCOUTKÅR');
-    expect(wordmark.textStyle.color).toBe('#043a63');
-    expect(wordmark.textStyle.bold).toBe(true);
-    expect(wordmark.textStyle.fontFamily).toBe('Poppins');
+    expect(brandCell.images).toHaveLength(1);
+    const logo = brandCell.images[0];
+    expect(logo.width / logo.height).toBeCloseTo(1030 / 126, 1);
   });
 
   it('shares the created doc as view-only for anyone with the link', () => {
@@ -523,7 +526,7 @@ describe('paper form (Google Doc)', () => {
       if (String(url).indexOf('qrserver.com') !== -1) {
         return { getResponseCode: () => 500 };
       }
-      if (String(url).indexOf('lily-blue-header.png') !== -1) {
+      if (String(url).indexOf('sl_logo.png') !== -1) {
         return { getResponseCode: () => 200, getBlob: () => ({ setName: (name) => ({ name }) }) };
       }
       return { getResponseCode: () => 200, getContentText: () => JSON.stringify(ctx.tokenInfo) };
@@ -539,7 +542,7 @@ describe('paper form (Google Doc)', () => {
 
   it('still creates the doc if the logo fetch fails - the bold org name text carries on its own', () => {
     ctx.context.UrlFetchApp.fetch = (url) => {
-      if (String(url).indexOf('lily-blue-header.png') !== -1) {
+      if (String(url).indexOf('sl_logo.png') !== -1) {
         return { getResponseCode: () => 500 };
       }
       if (String(url).indexOf('qrserver.com') !== -1) {

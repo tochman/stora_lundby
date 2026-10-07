@@ -305,7 +305,7 @@ export function createCodeGsContext() {
     UrlFetchApp: {
       fetch: (url) => {
         urlFetchCalls.count += 1;
-        if (String(url).indexOf('qrserver.com') !== -1 || String(url).indexOf('lily-blue-header.png') !== -1) {
+        if (String(url).indexOf('qrserver.com') !== -1 || String(url).indexOf('sl_logo.png') !== -1) {
           return {
             getResponseCode: () => 200,
             getBlob: () => ({ setName: (name) => ({ name }) })
