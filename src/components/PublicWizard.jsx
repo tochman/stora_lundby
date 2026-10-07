@@ -351,16 +351,23 @@ export default function PublicWizard() {
                 <p className="text-sm text-slate-500">Marknadspass, förberedelser, arbetsdag och pysseldag.</p>
                 <div className="space-y-2">
                   {workActivities.map((activity) => (
-                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                    <label
+                      key={activity.id}
+                      className={`flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 ${activity.full ? 'opacity-60' : 'hover:bg-slate-50'}`}
+                    >
                       <input
                         type="checkbox"
                         className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
                         checked={formData.selectedActivities.includes(activity.id)}
+                        disabled={activity.full}
                         onChange={() => toggleActivity(activity.id)}
                       />
                       <span>
                         <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
-                        <span className="block text-slate-600">{activity.label}</span>
+                        <span className="block text-slate-600">
+                          {activity.label}
+                          {activity.full && <span className="ml-2 text-xs font-semibold text-red-600">Fullbokad</span>}
+                        </span>
                       </span>
                     </label>
                   ))}
@@ -376,16 +383,23 @@ export default function PublicWizard() {
                 </p>
                 <div className="space-y-2">
                   {giftActivities.map((activity) => (
-                    <label key={activity.id} className="flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 hover:bg-slate-50">
+                    <label
+                      key={activity.id}
+                      className={`flex items-start gap-3 rounded-lg border border-slate-200 p-3 text-sm text-slate-700 ${activity.full ? 'opacity-60' : 'hover:bg-slate-50'}`}
+                    >
                       <input
                         type="checkbox"
                         className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
                         checked={formData.selectedActivities.includes(activity.id)}
+                        disabled={activity.full}
                         onChange={() => toggleActivity(activity.id)}
                       />
                       <span>
                         <span className="block font-medium text-slate-800">{formatActivityWhen(activity)}</span>
-                        <span className="block text-slate-600">{activity.label}</span>
+                        <span className="block text-slate-600">
+                          {activity.label}
+                          {activity.full && <span className="ml-2 text-xs font-semibold text-red-600">Fullbokad</span>}
+                        </span>
                       </span>
                     </label>
                   ))}
@@ -398,15 +412,19 @@ export default function PublicWizard() {
                 <h2 className="text-2xl font-bold text-slate-800">Jag kan ställa upp till följande</h2>
                 <div className="space-y-2">
                   {standingRoleActivities.map((activity) => (
-                    <div key={activity.id} className="rounded-lg border border-slate-200 p-3">
+                    <div key={activity.id} className={`rounded-lg border border-slate-200 p-3 ${activity.full ? 'opacity-60' : ''}`}>
                       <label className="flex items-start gap-3 text-sm text-slate-700">
                         <input
                           type="checkbox"
                           className="mt-1 h-4 w-4 rounded border-slate-300 text-brand-500 focus:ring-brand-200"
                           checked={formData.selectedActivities.includes(activity.id)}
+                          disabled={activity.full}
                           onChange={() => toggleActivity(activity.id)}
                         />
-                        <span>{activity.label}{activity.id === 'own-suggestion' ? ':' : ''}</span>
+                        <span>
+                          {activity.label}{activity.id === 'own-suggestion' ? ':' : ''}
+                          {activity.full && <span className="ml-2 text-xs font-semibold text-red-600">Fullbokad</span>}
+                        </span>
                       </label>
                       {activity.id === 'own-suggestion' && (
                         <Reveal open={formData.selectedActivities.includes('own-suggestion')}>

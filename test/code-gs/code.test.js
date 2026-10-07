@@ -379,6 +379,42 @@ describe('caching of config and activities reads', () => {
   });
 });
 
+describe('activity signup counts vs capacity', () => {
+  it('leaves an activity with no capacity set untouched', () => {
+    const activities = ctx.context.getActivities('2026', 'Höst');
+    const noCapacity = activities.find((a) => a.id === 'prep-skordemarknad');
+    expect(noCapacity.capacity).toBeNull();
+    expect(noCapacity.signupCount).toBeUndefined();
+    expect(noCapacity.full).toBeUndefined();
+  });
+
+  it('counts signups and flags an activity full once capacity is reached', () => {
+    ctx.context.upsertActivity({
+      id: 'capped-activity', year: '2026', term: 'Höst', category: 'workday',
+      label: 'Begränsad aktivitet', capacity: 2, active: true, sortOrder: 99
+    });
+    ctx.context.submitApplication({ ...validPayload(), guardianEmail: 'a@example.com', selectedActivities: ['capped-activity'] });
+    ctx.context.submitApplication({ ...validPayload(), guardianEmail: 'b@example.com', selectedActivities: ['capped-activity'] });
+
+    const activity = ctx.context.getActivities('2026', 'Höst').find((a) => a.id === 'capped-activity');
+    expect(activity.signupCount).toBe(2);
+    expect(activity.full).toBe(true);
+  });
+
+  it('a guardian editing their own response does not double-count toward capacity', () => {
+    ctx.context.upsertActivity({
+      id: 'capped-activity-2', year: '2026', term: 'Höst', category: 'workday',
+      label: 'Begränsad aktivitet 2', capacity: 1, active: true, sortOrder: 99
+    });
+    ctx.context.submitApplication({ ...validPayload(), guardianEmail: 'a@example.com', selectedActivities: ['capped-activity-2'] });
+    ctx.context.submitApplication({ ...validPayload(), guardianEmail: 'a@example.com', selectedActivities: ['capped-activity-2'] });
+
+    const activity = ctx.context.getActivities('2026', 'Höst').find((a) => a.id === 'capped-activity-2');
+    expect(activity.signupCount).toBe(1);
+    expect(activity.full).toBe(true);
+  });
+});
+
 describe('purgeTermData', () => {
   it('deletes matching Applications and ConsentLog rows and logs only counts', () => {
     ctx.context.submitApplication(validPayload());

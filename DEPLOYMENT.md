@@ -74,8 +74,8 @@ custom headers, that's almost certainly why it broke.
 
 ### Signed in, but still see "Åtkomst nekad"
 
-Your email isn't in the `Admins` sheet, or `active` isn't `TRUE`. Add it directly in the sheet for now
-(story C7 - an in-app admin-management screen - hasn't been built yet).
+Your email isn't in the `Admins` sheet, or `active` isn't `TRUE`. Add it directly in the sheet, or have an
+existing admin add you from the Admins tab in the admin panel.
 
 ### Data not saving / "Hittade ingen anmälan"
 

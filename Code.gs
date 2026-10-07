@@ -504,9 +504,26 @@ function getActivitiesRaw() {
   return raw;
 }
 
+// Only activities an admin actually gave a capacity are worth a signup
+// count against - most never set one, and "0/null" would be meaningless.
+// Counts every Applications row currently listing the activity (ids are
+// unique per term - copyActivities mints a fresh id per copy - so no
+// cross-term bleed to guard against).
+function getActivitySignupCounts() {
+  var counts = {};
+  sheetRowsAsObjects(SHEET_NAMES.applications).forEach(function (app) {
+    var ids = app.selectedActivities ? JSON.parse(app.selectedActivities) : [];
+    ids.forEach(function (id) {
+      counts[id] = (counts[id] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
 function getActivities(year, term) {
   var activeYear = year || getConfigValue('currentYear', '2026');
   var activeTerm = term || getConfigValue('currentTerm', 'Höst');
+  var signupCounts = getActivitySignupCounts();
 
   return getActivitiesRaw()
     .filter(function (activity) {
@@ -518,7 +535,14 @@ function getActivities(year, term) {
       }
       return String(activity.year) === String(activeYear) && String(activity.term) === String(activeTerm);
     })
-    .sort(function (a, b) { return a.sortOrder - b.sortOrder; });
+    .sort(function (a, b) { return a.sortOrder - b.sortOrder; })
+    .map(function (activity) {
+      if (activity.capacity === null) {
+        return activity;
+      }
+      var signupCount = signupCounts[activity.id] || 0;
+      return Object.assign({}, activity, { signupCount: signupCount, full: signupCount >= activity.capacity });
+    });
 }
 
 function upsertActivity(activity) {
@@ -647,6 +671,11 @@ function submitApplication(payload) {
   if (selectedActivities.indexOf('own-suggestion') !== -1 && !data.ownSuggestionText) {
     throw new Error('Beskriv ditt eget förslag innan du skickar in anmälan.');
   }
+  // ponytail: capacity is only enforced client-side (the form hides/disables
+  // a full activity, see getActivities' `full` flag) - a submission here
+  // isn't rejected even if it pushes an activity over capacity. Two guardians
+  // racing for the last spot could both get in. Add a server-side re-check
+  // against getActivitySignupCounts() here if that ever actually happens.
 
   var deadline = getConfigValue('submissionDeadline', '');
   if (deadline && new Date() > new Date(deadline + 'T23:59:59')) {

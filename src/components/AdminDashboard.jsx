@@ -299,6 +299,22 @@ export default function AdminDashboard() {
           </section>
         )}
 
+        {/* Only activities an admin actually gave a capacity show up here -
+            most never set one, and a 0/null row would be meaningless. */}
+        {view === 'applications' && activities.some((a) => a.capacity != null) && (
+          <section className="card">
+            <h3 className="mb-3 text-sm font-semibold text-slate-700">Platser</h3>
+            <ul className="space-y-1 text-sm">
+              {activities.filter((a) => a.capacity != null).map((a) => (
+                <li key={a.id} className={`flex justify-between ${a.full ? 'font-semibold text-red-600' : 'text-slate-600'}`}>
+                  <span>{a.label}</span>
+                  <span>{a.signupCount}/{a.capacity}{a.full ? ' (fullbokad)' : ''}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
+
         {view === 'applications' && showManualEntry && (
           <ManualEntryForm
             activities={activities}
