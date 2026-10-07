@@ -81,7 +81,7 @@ function SignInScreen({ error }) {
 export default function AdminDashboard() {
   const [idToken, setIdToken] = useState(() => getStoredIdToken());
   const [applications, setApplications] = useState([]);
-  const [summary, setSummary] = useState(null);
+  const [config, setConfig] = useState(null);
   const [activities, setActivities] = useState([]);
   const [filter, setFilter] = useState({ status: 'all', activity: 'all', search: '', term: 'all' });
   const [loading, setLoading] = useState(true);
@@ -104,14 +104,14 @@ export default function AdminDashboard() {
       setLoading(true);
       const results = await api.batch([
         { action: 'getApplications', params: { idToken: token } },
-        { action: 'getAdminSummary', params: { idToken: token } },
+        { action: 'getConfig', params: {} },
         { action: 'getActivities', params: {} }
       ]);
       const apps = unwrapBatchResult(results, 0, 'hämtning av anmälningar');
-      const summaryData = unwrapBatchResult(results, 1, 'hämtning av sammanfattning');
+      const publicConfig = unwrapBatchResult(results, 1, 'hämtning av inställningar');
       const activityList = unwrapBatchResult(results, 2, 'hämtning av aktiviteter');
       setApplications(apps || []);
-      setSummary(summaryData);
+      setConfig(publicConfig);
       setActivities(activityList || []);
       setError('');
     } catch (err) {
@@ -138,10 +138,29 @@ export default function AdminDashboard() {
     return <SignInScreen error={error} />;
   }
 
-  // Derived live from `applications` (not the one-off summary fetch), so it
-  // stays correct after a local status patch in setStatus() without needing
-  // a full reload.
-  const liveNewCount = applications.filter((app) => String(app.status).toLowerCase() === 'ny').length;
+  // All derived live from `applications` (not a one-off summary fetch), so
+  // they stay correct after a local status patch in setStatus() without
+  // needing a full reload - and scoped to the currently configured term,
+  // since applications from every term ever submitted now coexist in the
+  // same sheet and mixing them together stopped being a meaningful "status
+  // right now" snapshot.
+  const currentTermApplications = config
+    ? applications.filter((app) => app.year === config.currentYear && app.term === config.currentTerm)
+    : [];
+  const activitiesById = Object.fromEntries(activities.map((a) => [a.id, a]));
+  const stats = currentTermApplications.reduce(
+    (acc, app) => {
+      if (String(app.status).toLowerCase() === 'ny') acc.newCount += 1;
+      (app.selectedActivities || []).forEach((id) => {
+        const category = activitiesById[id]?.category;
+        if (category === 'gift') acc.giftCount += 1;
+        else if (category === 'standing-role') acc.standingRoleCount += 1;
+        else if (category) acc.attendanceCount += 1;
+      });
+      return acc;
+    },
+    { newCount: 0, giftCount: 0, standingRoleCount: 0, attendanceCount: 0 }
+  );
 
   const termOptions = collectTermOptions(applications);
 
@@ -246,23 +265,32 @@ export default function AdminDashboard() {
           </div>
         )}
 
-        {view === 'applications' && summary && (
-          <section className="grid gap-4 md:grid-cols-4">
-            <div className="card border-l-4 border-brand-500 bg-brand-50">
-              <div className="text-sm text-slate-600">Totalt</div>
-              <div className="mt-2 text-3xl font-bold text-brand-500">{summary.total}</div>
-            </div>
-            <div className="card border-l-4 border-yellow-500 bg-yellow-50">
-              <div className="text-sm text-slate-600">Nya</div>
-              <div className="mt-2 text-3xl font-bold text-yellow-500">{liveNewCount}</div>
-            </div>
-            <div className="card border-l-4 border-green-500 bg-green-50">
-              <div className="text-sm text-slate-600">Bemannade pass</div>
-              <div className="mt-2 text-3xl font-bold text-green-500">{summary.attendanceCount}</div>
-            </div>
-            <div className="card border-l-4 border-violet-500 bg-violet-50">
-              <div className="text-sm text-slate-600">Lotterigåvor / stående roller</div>
-              <div className="mt-2 text-3xl font-bold text-violet-500">{summary.giftCount + summary.standingRoleCount}</div>
+        {view === 'applications' && config && (
+          <section>
+            <p className="mb-3 text-sm font-semibold text-slate-500">
+              Läget just nu - {config.currentTerm} {config.currentYear}
+            </p>
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+              <div className="card">
+                <div className="text-sm text-slate-600">Anmälningar</div>
+                <div className="mt-2 text-3xl font-bold text-brand-500">{currentTermApplications.length}</div>
+              </div>
+              <div className="card">
+                <div className="text-sm text-slate-600">Nya</div>
+                <div className="mt-2 text-3xl font-bold text-brand-500">{stats.newCount}</div>
+              </div>
+              <div className="card">
+                <div className="text-sm text-slate-600">Bemannade pass</div>
+                <div className="mt-2 text-3xl font-bold text-brand-500">{stats.attendanceCount}</div>
+              </div>
+              <div className="card">
+                <div className="text-sm text-slate-600">Lotterigåvor</div>
+                <div className="mt-2 text-3xl font-bold text-brand-500">{stats.giftCount}</div>
+              </div>
+              <div className="card">
+                <div className="text-sm text-slate-600">Stående roller</div>
+                <div className="mt-2 text-3xl font-bold text-brand-500">{stats.standingRoleCount}</div>
+              </div>
             </div>
           </section>
         )}
