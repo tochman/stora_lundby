@@ -286,6 +286,37 @@ export default function PublicWizard() {
           </p>
         )}
 
+        {/* Context from the paper sign-up sheet's covering letter, shown
+            once before the checklist starts (step 1 only) - the digital
+            form previously jumped straight into the checklist with none of
+            the "why we need this, what's expected of you" framing. */}
+        {step === 1 && (
+          <div className="card mb-8 space-y-3 text-sm text-slate-700">
+            <h2 className="text-xl font-bold text-slate-800">Vi behöver din hjälp!</h2>
+            <p>
+              Stora Lundby scoutkår drivs helt och hållet ideellt av ledare, funktionärer och styrelse. Kåren är en
+              partipolitiskt och religiöst obunden organisation. Om vi ska kunna fortsätta att ha en scoutkår så
+              behöver vi hjälp av er scoutföräldrar med vissa aktiviteter.
+            </p>
+            <p className="font-semibold text-slate-800">
+              Du som förälder förväntas hjälpa till vid minst ett, gärna två tillfällen varje termin. Det handlar om att:
+            </p>
+            <ul className="list-inside list-disc space-y-1">
+              <li>
+                Få inkomster från marknader på Mjörnbotorget och från annan försäljning. Här behövs det dels skänkta
+                vinster till lotteri, men också praktisk hjälp att samordna marknadsståndet, tre marknader per år.
+              </li>
+              <li>Sköta om scoutlokalerna Scoutgården och Ljungslätt med reparationer, städning etc.</li>
+              <li>
+                Ibland behöver vi också praktisk hjälp för en enstaka insats. Det kommer vi att efterlysa i
+                månadsbreven som vi skickar ut.
+              </li>
+            </ul>
+            <p>Du får gärna komma med helt egna idéer om insatser också. Välkommen med förslag!</p>
+            <p className="italic text-slate-500">Styrelsen i Stora Lundby Scoutkår</p>
+          </div>
+        )}
+
         <div className="mb-8">
           <div className="mb-4 flex items-center justify-between gap-2">
             {steps.map((item) => (
